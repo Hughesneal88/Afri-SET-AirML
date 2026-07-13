@@ -1,0 +1,6 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+9764,30469,US Diplomatic Post: Accra-9764,2023-08-23T20:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,6.0
+9764,30469,US Diplomatic Post: Accra-9764,2023-08-23T21:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,5.0
+9764,30469,US Diplomatic Post: Accra-9764,2023-08-23T22:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,7.0
+9764,30469,US Diplomatic Post: Accra-9764,2023-08-23T23:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,9.0
+9764,30469,US Diplomatic Post: Accra-9764,2023-08-24T00:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,21.0

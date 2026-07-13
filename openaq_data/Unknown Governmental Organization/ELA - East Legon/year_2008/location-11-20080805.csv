@@ -1,0 +1,2 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+11,21,ELA - East Legon-11,2008-08-05T07:39:00+00:00,5.6408137,-0.1579063,pm25,µg/m³,19.0

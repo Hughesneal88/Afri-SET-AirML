@@ -1,0 +1,3 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+3,6,NMA - Nima-3,2008-04-19T07:44:00+00:00,5.58389,-0.19968,pm10,µg/m³,62.06
+3,5,NMA - Nima-3,2008-04-19T07:44:00+00:00,5.58389,-0.19968,pm25,µg/m³,33.26

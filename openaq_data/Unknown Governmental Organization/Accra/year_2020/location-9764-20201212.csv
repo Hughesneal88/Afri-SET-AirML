@@ -1,0 +1,2 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+9764,30469,US Diplomatic Post: Accra-9764,2020-12-13T00:00:00+00:00,5.579447,-0.170699,pm25,µg/m³,13.0

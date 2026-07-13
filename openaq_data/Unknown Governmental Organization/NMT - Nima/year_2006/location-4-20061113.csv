@@ -1,0 +1,2 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+4,8,NMT - Nima-4,2006-11-13T06:30:00+00:00,5.58165,-0.19898,pm25,µg/m³,101.28

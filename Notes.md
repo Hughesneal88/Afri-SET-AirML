@@ -1,22 +1,47 @@
 ## Notes
 
+What is the Project.
+Improving Low-Cost Sensor Prediction
+
+
+
+
+5m 50.8s
+Just now
+
+
+
+``` {'best_params': {'mlpregressor__solver': 'adam',
+  'mlpregressor__hidden_layer_sizes': (128,),
+  'mlpregressor__batch_size': 64,
+  'mlpregressor__alpha': 0.01,
+  'mlpregressor__activation': 'tanh'}}
+
+  'estimator': Pipeline(steps=[('standardscaler', StandardScaler()),
+                 ('mlpregressor',
+                  MLPRegressor(activation='tanh', alpha=0.01, batch_size=64,
+                               early_stopping=True, hidden_layer_sizes=(128,),
+                               max_iter=1000, random_state=42))]),
+```
+Presence = 80.603055
+
+
 ### Benchmark
 
-
-**R2:** `0.7328804557571189`
-
-**MAE:** `7.6203705477160595`
-
-**RMSE:** `14.486093929261415`
+```
+R2: 0.5580772524685484
+MAE: 6.221306418683423
+RMSE: 8.916936249589217
+```
 
 
 ### Random Forest Regressor Model
 
-**R2:** `0.9371249142096609`
+**R2:** `0.90`
 
-**MAE:** `3.740921520060963`
+**MAE:** `1.90`
 
-**RMSE:** `6.32863140318434`
+**RMSE:** `4.34`
 
 
 

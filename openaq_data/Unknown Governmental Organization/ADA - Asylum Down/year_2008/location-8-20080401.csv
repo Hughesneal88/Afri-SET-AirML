@@ -1,0 +1,3 @@
+location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+8,16,ADA - Asylum Down-8,2008-04-01T06:14:00+00:00,5.566722,-0.2077778,pm10,µg/m³,64.95
+8,15,ADA - Asylum Down-8,2008-04-01T06:14:00+00:00,5.566722,-0.2077778,pm25,µg/m³,30.12
