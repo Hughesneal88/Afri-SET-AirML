@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirML Calibration & AirSense AI Studio | Afri-SET</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" defer></script>
+    <!-- Marked.js Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Header -->
+        <header class="header-banner flex-between">
+            <div class="header-brand">
+                <button id="sidebarToggleBtn" class="sidebar-toggle-btn" title="Toggle Navigation Sidebar">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="logo-icon"><i class="fa-solid fa-wind"></i></div>
+                <div>
+                    <h1>AirML Calibration Studio</h1>
+                    <p class="subtitle">QuantAQ Modulair-PM Telemetry, US EPA AQI & AirSense AI Chat Platform • Afri-SET</p>
+                </div>
+            </div>
+
+            <div class="header-status flex-between" style="gap:12px;">
+                <span class="badge badge-pulse" id="datasetBadge"><i class="fa-solid fa-wifi"></i> QuantAQ Stream Active</span>
+                <button id="userAuthBtn" class="user-account-btn" style="width:auto;">
+                    <div class="user-avatar" id="userAvatarIcon">G</div>
+                    <span class="user-name-text" id="userNameLabel">Sign In / Register</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main App Layout Wrapper -->
+        <div class="app-wrapper">
+            <!-- Collapsible Left Navigation Sidebar -->
+            <aside class="app-sidebar" id="appSidebar">
+                <div>
+                    <div class="sidebar-header">
+                        <div class="sidebar-brand">
+                            <i class="fa-solid fa-leaf"></i> <span class="sidebar-text">AirML Studio</span>
+                        </div>
+                        <button id="sidebarCollapseBtn" class="icon-btn" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">
+                            <i class="fa-solid fa-angles-left"></i>
+                        </button>
+                    </div>
+
+                    <div class="sidebar-nav">
+                        <span class="sidebar-section-title">Navigation</span>
+                        <button class="nav-item-btn active" data-tab="tab-explorer">
+                            <i class="fa-solid fa-chart-area"></i> <span class="sidebar-text">Time Series Explorer</span>
+                        </button>
+                        <button class="nav-item-btn" data-tab="tab-diagnostics">
+                            <i class="fa-solid fa-chart-line"></i> <span class="sidebar-text">Diagnostics & Fit</span>
+                        </button>
+                        <button class="nav-item-btn" data-tab="tab-leaderboard">
+                            <i class="fa-solid fa-trophy"></i> <span class="sidebar-text">Model Leaderboard</span>
+                        </button>
+                        <button class="nav-item-btn" data-tab="tab-simulator">
+                            <i class="fa-solid fa-sliders"></i> <span class="sidebar-text">Prediction Playground</span>
+                        </button>
+
+                        <span class="sidebar-section-title">AI Assistant</span>
+                        <button class="nav-item-btn" data-tab="tab-rag">
+                            <i class="fa-solid fa-comments"></i> <span class="sidebar-text">AirSense AI Chat</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-footer">
+                    <div class="sidebar-user-pill" style="font-size:11px; color:var(--text-muted);">
+                        <i class="fa-solid fa-database"></i> <span class="sidebar-text">Legon Station • MOD-PM-01068</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="main-content-layout">
+                <!-- Live Real-Time Telemetry & Calibration Banner on Homepage -->
+                <div class="card glass-card live-telemetry-banner">
+                    <div class="live-banner-header flex-between">
+                        <div class="live-title-group">
+                            <div class="live-pulse-dot"></div>
+                            <h3>QuantAQ Modulair-PM (MOD-PM-01068) Live Telemetry Stream</h3>
+                        </div>
+                        <div class="live-timestamp-badge">
+                            <i class="fa-solid fa-satellite-dish"></i> <span id="live_timestamp">Updating live stream...</span>
+                        </div>
+                    </div>
+
+                    <div class="live-metrics-grid">
+                        <!-- Temperature Card -->
+                        <div class="live-metric-card">
+                            <div class="live-metric-icon icon-temp"><i class="fa-solid fa-temperature-three-quarters"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">Sample Temperature</span>
+                                <h2 id="live_temp">-- °C</h2>
+                                <span class="live-sub">Ambient Thermal Data</span>
+                            </div>
+                        </div>
+
+                        <!-- Relative Humidity Card -->
+                        <div class="live-metric-card">
+                            <div class="live-metric-icon icon-rh"><i class="fa-solid fa-droplet"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">Relative Humidity</span>
+                                <h2 id="live_rh">-- %</h2>
+                                <span class="live-sub">Hygroscopic Factor</span>
+                            </div>
+                        </div>
+
+                        <!-- Raw PM2.5 Card -->
+                        <div class="live-metric-card">
+                            <div class="live-metric-icon icon-raw"><i class="fa-solid fa-smog"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">Raw Modulair PM2.5</span>
+                                <h2 id="live_raw_pm25">-- µg/m³</h2>
+                                <span class="live-sub">Uncalibrated OPC Output</span>
+                            </div>
+                        </div>
+
+                        <!-- Best Calibrated PM2.5 Card -->
+                        <div class="live-metric-card live-card-calibrated">
+                            <div class="live-metric-icon icon-calib"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">Calibrated Target PM2.5</span>
+                                <h2 id="live_calibrated_pm25">-- µg/m³</h2>
+                                <span class="live-sub" id="live_model_label">Random Forest Regressor</span>
+                            </div>
+                        </div>
+
+                        <!-- Adjustment Delta Card -->
+                        <div class="live-metric-card">
+                            <div class="live-metric-icon icon-delta"><i class="fa-solid fa-chart-line-up"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">Calibration Delta</span>
+                                <h2 id="live_delta">-- µg/m³</h2>
+                                <span class="live-sub" id="live_pct_delta">-- % adjustment</span>
+                            </div>
+                        </div>
+
+                        <!-- Official US EPA AQI Card -->
+                        <div class="live-metric-card live-card-aqi" id="live_aqi_card">
+                            <div class="live-metric-icon icon-aqi"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div class="live-metric-info">
+                                <span class="live-label">US EPA Air Quality Index</span>
+                                <h2 id="live_aqi_score">AQI --</h2>
+                                <span class="live-sub" id="live_aqi_category">Good Air Quality</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 1: Time Series Explorer -->
+                <div id="tab-explorer" class="tab-content active">
+                    <div class="controls-bar card glass-card margin-top flex-between">
+                        <div class="control-group">
+                            <label for="modelSelect"><i class="fa-solid fa-microchip"></i> Primary Calibration Model:</label>
+                            <select id="modelSelect" class="custom-select"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="compareSelect"><i class="fa-solid fa-code-compare"></i> Compare Model:</label>
+                            <select id="compareSelect" class="custom-select">
+                                <option value="none">-- None --</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="partitionSelect"><i class="fa-solid fa-filter"></i> Dataset Split:</label>
+                            <select id="partitionSelect" class="custom-select">
+                                <option value="holdout">Out-of-Sample Holdout (2025)</option>
+                                <option value="validation">Validation Set</option>
+                                <option value="test">Test Set</option>
+                                <option value="full">Full Dataset (2024-2025)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Overview Cards -->
+                    <div class="metrics-grid margin-top">
+                        <div class="metric-card card glass-card">
+                            <span class="metric-title">Coefficient of Determination (R²)</span>
+                            <div id="metric-r2" class="metric-value">--</div>
+                            <span class="metric-desc">Target: 1.0 (Good Fit)</span>
+                        </div>
+                        <div class="metric-card card glass-card">
+                            <span class="metric-title">Mean Absolute Error (MAE)</span>
+                            <div id="metric-mae" class="metric-value">-- µg/m³</div>
+                            <span class="metric-desc">Average absolute error</span>
+                        </div>
+                        <div class="metric-card card glass-card">
+                            <span class="metric-title">Root Mean Squared Error (RMSE)</span>
+                            <div id="metric-rmse" class="metric-value">-- µg/m³</div>
+                            <span class="metric-desc">Penalizes large spikes</span>
+                        </div>
+                        <div class="metric-card card glass-card">
+                            <span class="metric-title">Mean Calibration Bias</span>
+                            <div id="metric-bias" class="metric-value">-- µg/m³</div>
+                            <span class="metric-desc">Systematic over/under estimation</span>
+                        </div>
+                    </div>
+
+                    <!-- Time Series Plot -->
+                    <div class="card glass-card margin-top">
+                        <div class="card-header flex-between">
+                            <h3><i class="fa-solid fa-chart-line"></i> Calibrated PM2.5 Concentration vs Teledyne FEM Reference</h3>
+                            <div class="legend-pills">
+                                <span class="pill pill-reference"><i class="fa-solid fa-circle"></i> Reference (T640)</span>
+                                <span class="pill pill-calibrated"><i class="fa-solid fa-circle"></i> Calibrated Target</span>
+                                <span class="pill pill-raw"><i class="fa-solid fa-circle"></i> Raw OPC-N3</span>
+                            </div>
+                        </div>
+                        <div id="plotTimeSeries" class="plot-container"></div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Diagnostics & Fit -->
+                <div id="tab-diagnostics" class="tab-content">
+                    <div class="plots-dual-grid margin-top">
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-chart-scatter"></i> Predicted vs Reference Scatter</h3>
+                            </div>
+                            <div id="plotScatter" class="plot-container-sm"></div>
+                        </div>
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-chart-simple"></i> Calibration Residuals Distribution</h3>
+                            </div>
+                            <div id="plotResiduals" class="plot-container-sm"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Model Leaderboard -->
+                <div id="tab-leaderboard" class="tab-content">
+                    <div class="card glass-card margin-top">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-trophy"></i> Model Leaderboard Benchmark (Holdout Out-of-Sample Test)</h3>
+                        </div>
+                        <div class="table-responsive margin-top">
+                            <table class="leaderboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Model Name</th>
+                                        <th>Out-of-Sample R²</th>
+                                        <th>MAE (µg/m³)</th>
+                                        <th>RMSE (µg/m³)</th>
+                                        <th>Feature Count</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="rank-1">
+                                        <td><strong>⭐ Random Forest Regressor (Update2)</strong></td>
+                                        <td><span class="badge badge-success">0.902 / Holdout 0.775</span></td>
+                                        <td>2.03</td>
+                                        <td>3.05</td>
+                                        <td>11 Features</td>
+                                        <td><span class="status-pill status-primary">Active Best Calibrator</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Two-Stage Purged Calibrator (RF + LightGBM)</td>
+                                        <td>0.884</td>
+                                        <td>2.15</td>
+                                        <td>3.21</td>
+                                        <td>8 Features</td>
+                                        <td>Candidate Model</td>
+                                    </tr>
+                                    <tr>
+                                        <td>PMC Hybrid Calibrator (kNN + GBR + RF)</td>
+                                        <td>0.871</td>
+                                        <td>2.31</td>
+                                        <td>3.40</td>
+                                        <td>10 Features</td>
+                                        <td>Paper Calibrator</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Atmospheric Mixture of Experts (MoE)</td>
+                                        <td>0.865</td>
+                                        <td>2.42</td>
+                                        <td>3.58</td>
+                                        <td>14 Features</td>
+                                        <td>Ensemble Expert</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Compact Generalization RF</td>
+                                        <td>0.842</td>
+                                        <td>2.68</td>
+                                        <td>3.89</td>
+                                        <td>5 Features</td>
+                                        <td>Baseline Model</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Prediction Playground -->
+                <div id="tab-simulator" class="tab-content">
+                    <div class="card glass-card simulator-card-wide margin-top">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-sliders"></i> Manual Parameter Calibration Playground</h3>
+                        </div>
+                        <div class="simulator-grid">
+                            <div class="sim-inputs">
+                                <div class="slider-group">
+                                    <div class="slider-header">
+                                        <span>Raw Sensor PM2.5 (µg/m³)</span>
+                                        <span id="sim_pm25_val" class="slider-val">45.0</span>
+                                    </div>
+                                    <input type="range" id="sim_pm25" min="0" max="250" value="45" step="1">
+                                </div>
+                                <div class="slider-group">
+                                    <div class="slider-header">
+                                        <span>Sample Temperature (°C)</span>
+                                        <span id="sim_temp_val" class="slider-val">31.5</span>
+                                    </div>
+                                    <input type="range" id="sim_temp" min="15" max="45" value="31.5" step="0.5">
+                                </div>
+                                <div class="slider-group">
+                                    <div class="slider-header">
+                                        <span>Relative Humidity (%)</span>
+                                        <span id="sim_rh_val" class="slider-val">78.0</span>
+                                    </div>
+                                    <input type="range" id="sim_rh" min="20" max="100" value="78" step="1">
+                                </div>
+                                <div class="slider-group">
+                                    <div class="slider-header">
+                                        <span>Hour of Day (UTC)</span>
+                                        <span id="sim_hour_val" class="slider-val">14:00</span>
+                                    </div>
+                                    <input type="range" id="sim_hour" min="0" max="23" value="14" step="1">
+                                </div>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="sim_harmattan">
+                                    <span>Saharan Harmattan Dust Active (Nov - Mar)</span>
+                                </label>
+                            </div>
+                            <div class="sim-outputs">
+                                <div class="sim-result-box sim-result-large">
+                                    <div class="sim-label">Calibrated Target Prediction</div>
+                                    <div id="sim_prediction" class="sim-value sim-value-large">-- µg/m³</div>
+                                    <div id="sim_delta" class="sim-delta sim-delta-large">Adjustment: --</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: DEDICATED ACTUAL CHAT STUDIO (AirSense AI) -->
+                <div id="tab-rag" class="tab-content">
+                    <div class="chat-studio-grid">
+                        <!-- Left Panel: Saved Chat Conversations List -->
+                        <div class="chat-threads-sidebar">
+                            <button id="newChatBtn" class="btn btn-primary" style="width:100%;">
+                                <i class="fa-solid fa-plus"></i> New Conversation
+                            </button>
+                            <div class="chat-threads-header">
+                                <span class="chat-threads-title">Saved Chats</span>
+                                <i class="fa-solid fa-history" style="color:var(--text-muted);"></i>
+                            </div>
+                            <div id="chatSessionsList" class="chat-sessions-list">
+                                <!-- Saved sessions populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Interactive Chat Stream -->
+                        <div class="chat-main-panel">
+                            <!-- Chat Header -->
+                            <div class="chat-main-header">
+                                <div class="chat-main-header-info">
+                                    <div class="chat-bot-avatar"><i class="fa-solid fa-robot"></i></div>
+                                    <div>
+                                        <h4 style="font-size:14px; font-weight:700; color:#38bdf8;">AirSense AI Assistant</h4>
+                                        <span id="chatEngineStatus" style="font-size:11px; color:var(--text-secondary);">Groq Llama-3.3-70B • Multi-Turn Active</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <button id="clearChatBtn" class="btn btn-secondary btn-sm" title="Clear Message Stream"><i class="fa-solid fa-trash-can"></i> Clear Stream</button>
+                                </div>
+                            </div>
+
+                            <!-- Chat Messages Stream -->
+                            <div id="chatMessagesContainer" class="chat-messages-container">
+                                <!-- Welcome Message -->
+                                <div class="chat-msg-assistant">
+                                    <div class="chat-assistant-meta">
+                                        <span class="chat-engine-label"><i class="fa-solid fa-shield-halved"></i> AirSense AI Analyst</span>
+                                        <span style="font-size:11px; color:var(--text-muted);">Legon Station Stream</span>
+                                    </div>
+                                    <div class="rag-text">
+                                        Hello! I am **AirSense AI**, your environmental air quality analyst at the Department of Physics, University of Ghana, Legon. 
+                                        Ask me anything about current air quality, relative humidity particle swelling, optical sensor calibration, or machine learning accuracy!
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Suggestion Chips -->
+                            <div class="quick-chips-wrapper">
+                                <button class="chip-btn" data-prompt="Is current air quality safe?">Is air quality safe?</button>
+                                <button class="chip-btn" data-prompt="How does humidity affect optical sensors?">Humidity effect on OPC-N3</button>
+                                <button class="chip-btn" data-prompt="What is the holdout accuracy of Random Forest?">Model Accuracy & MAE</button>
+                                <button class="chip-btn" data-prompt="Explain Saharan Harmattan dust impact">Harmattan Dust Impact</button>
+                            </div>
+
+                            <!-- Bottom Input Bar -->
+                            <div class="chat-input-bar-container">
+                                <input type="text" id="chatInputText" class="chat-input-field" placeholder="Ask AirSense AI a question or follow-up...">
+                                <button id="sendChatBtn" class="btn btn-primary" style="padding: 12px 20px;">
+                                    <i class="fa-solid fa-paper-plane"></i> Send
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Final Year Research Project • Department of Physics, University of Ghana, Legon • Afri-SET Center</p>
+        </footer>
+    </div>
+
+    <!-- FEATURE 4: USER AUTHENTICATION MODAL -->
+    <div id="authModal" class="modal-backdrop">
+        <div class="modal-card">
+            <div class="auth-tabs-header">
+                <button id="authTabLogin" class="auth-tab-btn active">Sign In</button>
+                <button id="authTabRegister" class="auth-tab-btn">Create Account</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form">
+                <div class="auth-form-group">
+                    <label for="loginUsername">Username or Email</label>
+                    <input type="text" id="loginUsername" class="auth-input-field" required placeholder="Enter username or email">
+                </div>
+                <div class="auth-form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" class="auth-input-field" required placeholder="••••••••">
+                </div>
+                <div id="authErrorMsg" style="color:#ef4444; font-size:12px; margin-bottom:12px; display:none;"></div>
+                <button type="submit" class="btn btn-primary" style="width:100%; margin-top:8px;">Sign In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="auth-form" style="display:none;">
+                <div class="auth-form-group">
+                    <label for="regUsername">Username</label>
+                    <input type="text" id="regUsername" class="auth-input-field" required placeholder="Choose username">
+                </div>
+                <div class="auth-form-group">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" class="auth-input-field" required placeholder="name@domain.com">
+                </div>
+                <div class="auth-form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" class="auth-input-field" required placeholder="At least 6 characters">
+                </div>
+                <div id="regErrorMsg" style="color:#ef4444; font-size:12px; margin-bottom:12px; display:none;"></div>
+                <button type="submit" class="btn btn-primary" style="width:100%; margin-top:8px;">Create Account</button>
+            </form>
+
+            <button id="closeAuthModalBtn" class="btn btn-secondary" style="width:100%; margin-top:10px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="/static/app.js?v=6.0" defer></script>
+</body>
+</html>
