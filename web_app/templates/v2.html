@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en" data-mood="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSense v2 · Atmospheric Calibration Studio</title>
+    
+    <!-- Google Fonts: Plus Jakarta Sans, Inter, Azeret Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome 6 Pro Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Plotly.js for interactive analytics -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- Marked.js for AI Chat markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- KaTeX for high-fidelity mathematical formula rendering ($...$ and $$...$$) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+    <!-- Version 2 Styling -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='v2.css') }}">
+</head>
+<body class="theme-clear">
+
+    <!-- ═══════════════════════════════════════════════════════ DYNAMIC ATMOSPHERIC BACKDROP -->
+    <div class="atmospheric-backdrop" id="atmosphericBackdrop">
+        <div class="sky-gradient-base"></div>
+        <div class="sunbeam-rays" id="sunbeamRays"></div>
+        <div class="cloud-cluster cloud-left" id="cloudLeft"></div>
+        <div class="cloud-cluster cloud-center" id="cloudCenter"></div>
+        <div class="cloud-cluster cloud-right" id="cloudRight"></div>
+        <div class="storm-rain-overlay" id="stormRainOverlay"></div>
+        <canvas id="ambientParticleCanvas" class="ambient-particle-canvas"></canvas>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ MAIN VIEWPORT CONTAINER -->
+    <div class="v2-app-container">
+
+        <!-- ──────────────────────────────────────── TOP FLOATING GLASS PILL BAR -->
+        <header class="top-glass-bar">
+            <!-- Brand & Sensor Lockup -->
+            <div class="brand-pill" id="brandPill">
+                <span class="beacon-dot"></span>
+                <span class="brand-title">AirSense <span class="v2-badge">v2</span></span>
+                <span class="brand-separator">/</span>
+                <span class="sensor-id" id="topSensorId">MOD-PM-01068</span>
+            </div>
+
+            <!-- Center Segmented Navigation Pill -->
+            <nav class="nav-segmented-pill" role="navigation" aria-label="Main Navigation">
+                <button class="nav-pill-btn active" id="btnLiveStage" title="Live Atmospheric Stage">
+                    <i class="fa-solid fa-cloud-sun"></i>
+                    <span>Live</span>
+                </button>
+                <button class="nav-pill-btn" id="btnOpenAnalytics" title="Time Series & Analytics Sheet">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Analytics</span>
+                </button>
+                <button class="nav-pill-btn" id="btnOpenSimulator" title="Physics Calibration What-If">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Simulator</span>
+                </button>
+                <button class="nav-pill-btn" id="btnOpenLeaderboard" title="Model Benchmark Comparison">
+                    <i class="fa-solid fa-trophy"></i>
+                    <span>Models</span>
+                </button>
+                <button class="nav-pill-btn" id="btnOpenChat" title="AirSense AI Assistant">
+                    <i class="fa-solid fa-sparkles"></i>
+                    <span>AI Chat</span>
+                </button>
+            </nav>
+
+            <!-- Right Utility Controls -->
+            <div class="top-utility-group">
+                <!-- Live Clock Pill -->
+                <div class="clock-pill" id="liveClockPill">
+                    <span id="clockDate">-- ---</span>
+                    <span class="clock-divider">|</span>
+                    <span id="clockTime" class="clock-mono">--:--</span>
+                </div>
+
+                <!-- Atmospheric Mood Theme Toggle (Sun / Storm / Auto) -->
+                <div class="mood-toggle-pill" title="Atmospheric Environment Mode">
+                    <button class="mood-btn active" data-mood="auto" title="Auto (EPA AQI Data-Driven)">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
+                    <button class="mood-btn" data-mood="clear" title="Clear Skies (Day / Night)">
+                        <i class="fa-solid fa-sun" id="moodSunMoonIcon"></i>
+                    </button>
+                    <button class="mood-btn" data-mood="storm" title="Moody Atmospheric Storm">
+                        <i class="fa-solid fa-cloud-bolt"></i>
+                    </button>
+                </div>
+
+                <!-- User Profile / Auth Button -->
+                <button class="user-pill-btn" id="userAuthBtn" title="Account profile">
+                    <div class="user-avatar" id="userAvatarIcon">G</div>
+                    <span class="user-name" id="userNameLabel">Guest</span>
+                </button>
+
+                <!-- Legacy V1 Archive Link -->
+                <a href="/classic" class="v1-pill-link" title="Open Legacy V1 Studio Archive">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Legacy V1</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- ──────────────────────────────────────── HERO ATMOSPHERIC STAGE -->
+        <main class="v2-hero-stage">
+            
+            <!-- Left Hero: Status, Advisory, and Big Metric -->
+            <section class="hero-left-content">
+                <div class="hero-condition-wrap">
+                    <div class="hero-eyebrow" id="heroEyebrow">OPTIMAL AIR QUALITY</div>
+                    <h1 class="hero-status-heading" id="heroHeading">Atmospheric Conditions</h1>
+                    <div class="hero-substatus" id="heroSubstatus">monitoring real-time ambient optical channels</div>
+                </div>
+
+                <p class="hero-advisory-narrative" id="heroAdvisory">
+                    Ambient particulate levels remain optimal. Low relative humidity prevents optical sensor hygroscopic aerosol growth, ensuring baseline precision across low-cost optical channels.
+                </p>
+
+                <!-- Massive Primary Metric Display -->
+                <div class="hero-reading-card">
+                    <div class="reading-row">
+                        <span class="reading-num" id="heroCalibratedVal">16.8</span>
+                        <div class="reading-units-wrap">
+                            <span class="reading-unit">µg/m³</span>
+                            <span class="reading-sub-type">PM2.5 Calibrated</span>
+                        </div>
+                    </div>
+
+                    <div class="hero-meta-badges">
+                        <div class="epa-status-pill" id="heroEpaBadge">
+                            <span class="epa-tier-dot" id="heroEpaDot"></span>
+                            <span class="epa-tier-text" id="heroEpaText">AQI 61 · Moderate</span>
+                        </div>
+                        <div class="sensor-badge">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                            <span id="heroSensorTag">QuantAQ MOD-PM-01068</span>
+                        </div>
+                        <div class="model-badge" id="heroModelBadge">
+                            <i class="fa-solid fa-microchip"></i>
+                            <span id="heroModelTag">SPIME v4 Ensemble</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center Stage: Volumetric Cloud & Ambient Rays -->
+            <div class="hero-center-cloud-zone">
+                <div class="volumetric-cloud-art" id="cloudArtCore">
+                    <div class="cloud-puff puff-1"></div>
+                    <div class="cloud-puff puff-2"></div>
+                    <div class="cloud-puff puff-3"></div>
+                    <div class="cloud-puff puff-4"></div>
+                    <div class="solar-bloom" id="solarBloomCore"></div>
+                </div>
+            </div>
+
+            <!-- Right Glass Widget Column -->
+            <aside class="hero-right-widgets">
+                
+                <!-- Widget 1: Atmospheric Drift & Physics -->
+                <div class="glass-widget-card drift-widget">
+                    <div class="widget-head">
+                        <div class="widget-title-row">
+                            <i class="fa-solid fa-atom"></i>
+                            <span class="widget-title">Atmospheric Physics</span>
+                        </div>
+                        <span class="drift-status-badge" id="wDriftStatus">Drift: Minimal</span>
+                    </div>
+
+                    <div class="widget-metrics-grid">
+                        <div class="w-metric-cell">
+                            <span class="w-lbl">Raw Sensor PM2.5</span>
+                            <span class="w-val" id="wRawPM25">14.7 <span class="w-unit">µg/m³</span></span>
+                        </div>
+                        <div class="w-metric-cell">
+                            <span class="w-lbl">Humidity</span>
+                            <span class="w-val" id="wHumidity">79.7 <span class="w-unit">%</span></span>
+                        </div>
+                        <div class="w-metric-cell">
+                            <span class="w-lbl">Temperature</span>
+                            <span class="w-val" id="wTemp">26.3 <span class="w-unit">°C</span></span>
+                        </div>
+                        <div class="w-metric-cell">
+                            <span class="w-lbl">Correction Delta</span>
+                            <span class="w-val" id="wDelta">+2.3 <span class="w-unit">µg/m³</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Mini SVG Drift Waveform -->
+                    <div class="wave-spark-box">
+                        <svg class="drift-spark-svg" id="driftSparkSvg" viewBox="0 0 240 40" preserveAspectRatio="none">
+                            <defs>
+                                <linearGradient id="waveGlowGrad" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="rgba(255,255,255,0.2)" />
+                                    <stop offset="50%" stop-color="rgba(255,255,255,0.9)" />
+                                    <stop offset="100%" stop-color="rgba(255,255,255,0.3)" />
+                                </linearGradient>
+                            </defs>
+                            <path id="driftSparkPath" d="M 0 20 Q 60 5, 120 20 T 240 20" fill="none" stroke="url(#waveGlowGrad)" stroke-width="2" />
+                        </svg>
+                        <div class="wave-frequency-bars" id="waveFreqBars">
+                            <span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span>
+                            <span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span>
+                            <span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span><span class="f-bar"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Widget 2: Dual-Mode Semi-Circular Radial Dial Gauge -->
+                <div class="glass-widget-card radial-gauge-widget">
+                    <div class="widget-head">
+                        <div class="widget-title-row">
+                            <i class="fa-solid fa-gauge-high"></i>
+                            <span class="widget-title" id="dialWidgetTitle">Air Quality Dial</span>
+                        </div>
+                        <button class="dial-mode-flip-btn" id="dialModeFlipBtn" title="Switch between US EPA AQI and Physics Aerosol Swelling">
+                            <i class="fa-solid fa-repeat"></i>
+                            <span id="dialModeFlipLabel">f(RH) Swell</span>
+                        </button>
+                    </div>
+
+                    <!-- Semi-Circular Arc SVG Gauge -->
+                    <div class="semi-dial-canvas-wrap">
+                        <svg class="semi-dial-svg" viewBox="0 0 240 140" id="semiDialSvg">
+                            <defs>
+                                <!-- Multi-stop AQI gradient arc -->
+                                <linearGradient id="aqiArcGrad" x1="0%" y1="100%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#34d399" />
+                                    <stop offset="25%" stop-color="#fbbf24" />
+                                    <stop offset="50%" stop-color="#fb923c" />
+                                    <stop offset="75%" stop-color="#f87171" />
+                                    <stop offset="100%" stop-color="#c084fc" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Background Track Arc (Radius 85, Center 120, 115) -->
+                            <path d="M 35 115 A 85 85 0 0 1 205 115" fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="12" stroke-linecap="round" />
+                            
+                            <!-- Colored Active Progress Arc -->
+                            <path id="dialProgressArc" d="M 35 115 A 85 85 0 0 1 205 115" fill="none" stroke="url(#aqiArcGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="267" stroke-dashoffset="130" />
+                            
+                            <!-- Animated Dial Needle Center Pivot -->
+                            <g id="dialNeedleGroup" transform="translate(120, 115) rotate(-35)">
+                                <line x1="0" y1="0" x2="0" y2="-72" stroke="#ffffff" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="0" cy="0" r="6" fill="#ffffff" />
+                                <circle cx="0" cy="0" r="2.5" fill="#0f172a" />
+                                <circle cx="0" cy="-72" r="3.5" fill="#fbbf24" id="needleTipDot" />
+                            </g>
+                        </svg>
+
+                        <!-- Dial Center Value & Label Overlay -->
+                        <div class="dial-center-overlay">
+                            <div class="dial-score-num" id="dialCenterScore">61</div>
+                            <div class="dial-score-tier" id="dialCenterTier">Moderate</div>
+                            <div class="dial-score-meta" id="dialCenterMeta">US EPA AQI Scale (0–300+)</div>
+                        </div>
+                    </div>
+                </div>
+
+            </aside>
+        </main>
+
+        <!-- ──────────────────────────────────────── BOTTOM SPLINE WAVE FORECAST TIMELINE -->
+        <footer class="bottom-timeline-shelf">
+            <div class="shelf-header-bar">
+                <div class="shelf-title-wrap">
+                    <span class="shelf-title-icon"><i class="fa-solid fa-chart-area"></i></span>
+                    <span class="shelf-title-text" id="shelfTimelineTitle">24-Hour Predictive Horizon</span>
+                </div>
+
+                <!-- Forecast / History / Verify Mode Toggle -->
+                <div class="shelf-mode-pill">
+                    <button class="shelf-pill-btn active" id="btnModeForecast">Forecast (24h)</button>
+                    <button class="shelf-pill-btn" id="btnModeHistory">History (24h)</button>
+                    <button class="shelf-pill-btn" id="btnModeVerify">Verify Forecast</button>
+                </div>
+
+                <!-- Dynamic KPI Summary Badge -->
+                <div class="shelf-summary-badge" id="shelfSummaryBadge">
+                    <span class="trend-icon" id="shelfTrendIcon"><i class="fa-solid fa-arrow-trend-up"></i></span>
+                    <span id="shelfTrendText">Diurnal Peak: 17.7 µg/m³ at 07:00</span>
+                </div>
+            </div>
+
+            <!-- Continuous Spline Wave & Nodes Track -->
+            <div class="spline-timeline-container" id="splineTimelineContainer">
+                <!-- SVG Catmull-Rom Wave Layer -->
+                <svg class="timeline-spline-svg" id="timelineSplineSvg" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="splineWaveFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="rgba(255, 255, 255, 0.28)" />
+                            <stop offset="100%" stop-color="rgba(255, 255, 255, 0.0)" />
+                        </linearGradient>
+                    </defs>
+                    <path id="splineAreaPath" d="" fill="url(#splineWaveFill)" />
+                    <path id="splineStrokePath" d="" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+                </svg>
+
+                <!-- Interactive Timeline Points Row -->
+                <div class="timeline-nodes-row" id="timelineNodesRow">
+                    <!-- Populated dynamically via v2.js -->
+                </div>
+
+                <!-- Floating Hover Tooltip -->
+                <div class="node-hover-tooltip" id="nodeHoverTooltip">
+                    <div class="tooltip-time" id="ttTime">00:00</div>
+                    <div class="tooltip-val" id="ttVal">14.3 µg/m³</div>
+                    <div class="tooltip-aqi" id="ttAqi">AQI 56 · Moderate</div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ SLIDE-OUT FROSTED GLASS DRAWERS & MODALS -->
+    
+    <!-- Backdrop Overlay -->
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+
+    <!-- ──────────────────────────────────────── ANALYTICS & TIME-SERIES SHEET -->
+    <aside class="glass-sheet-drawer" id="analyticsDrawer" aria-hidden="true">
+        <div class="drawer-header">
+            <div class="drawer-title-group">
+                <i class="fa-solid fa-chart-line drawer-icon"></i>
+                <div>
+                    <h2 class="drawer-title">Time Series & Model Analytics</h2>
+                    <p class="drawer-subtitle">Explore raw vs calibrated sensor data across train, validation, and test splits</p>
+                </div>
+            </div>
+            <div class="drawer-header-actions">
+                <button class="drawer-action-btn" id="openPlotNewTabBtn" title="Open Fullscreen Interactive Plot in New Tab">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>Open in New Tab</span>
+                </button>
+                <button class="drawer-close-btn" id="closeAnalyticsBtn" title="Close Analytics"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <div class="drawer-body">
+            <!-- Controls Bar inside drawer -->
+            <div class="drawer-controls-bar">
+                <div class="ctrl-group">
+                    <label for="v2ModelSelect">Calibration Model</label>
+                    <select id="v2ModelSelect" class="drawer-select">
+                        <option value="stacked_physics_meta_ensemble" selected>🏆 SPIME v4 Meta-Ensemble (Primary)</option>
+                        <option value="random_forest_pm25_model_update2">Random Forest Regressor v2</option>
+                        <option value="two_stage_purged_calibrator">Two-Stage Purged Calibrator</option>
+                        <option value="pmc_hybrid_calibrator">PMC Hybrid Calibrator</option>
+                        <option value="moe_expert_model">Atmospheric Mixture-of-Experts (MoE)</option>
+                        <option value="compact_generalization_rf">Compact Generalization RF</option>
+                    </select>
+                </div>
+
+                <div class="ctrl-group">
+                    <label for="v2PartitionSelect">Evaluation Split</label>
+                    <select id="v2PartitionSelect" class="drawer-select">
+                        <option value="val" selected>Validation Split</option>
+                        <option value="test">Test Split (Unseen)</option>
+                        <option value="all">Full Dataset Horizon</option>
+                    </select>
+                </div>
+
+                <div class="ctrl-group">
+                    <label>&nbsp;</label>
+                    <button class="drawer-btn-primary" id="btnRefreshAnalytics"><i class="fa-solid fa-arrows-rotate"></i> Refresh Plot</button>
+                </div>
+            </div>
+
+            <!-- Statistical KPI Strip -->
+            <div class="drawer-stats-strip">
+                <div class="drawer-stat-card">
+                    <span class="stat-lbl">R² Goodness of Fit</span>
+                    <span class="stat-val stat-highlight" id="dStatR2">0.9922</span>
+                </div>
+                <div class="drawer-stat-card">
+                    <span class="stat-lbl">MAE (Mean Abs Error)</span>
+                    <span class="stat-val" id="dStatMAE">1.04 µg/m³</span>
+                </div>
+                <div class="drawer-stat-card">
+                    <span class="stat-lbl">RMSE</span>
+                    <span class="stat-val" id="dStatRMSE">1.62 µg/m³</span>
+                </div>
+                <div class="drawer-stat-card">
+                    <span class="stat-lbl">Mean Calibration Bias</span>
+                    <span class="stat-val" id="dStatBias">-0.01 µg/m³</span>
+                </div>
+            </div>
+
+            <!-- Plotly Interactive Chart Container -->
+            <div class="drawer-chart-container" id="analyticsChartContainer">
+                <div class="chart-loading-spinner" id="chartSpinner">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Rendering High-Precision Time-Series...</span>
+                </div>
+                <div id="v2PlotlyChart" style="width:100%; height:100%;"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ──────────────────────────────────────── PHYSICS WHAT-IF SIMULATOR DRAWER -->
+    <aside class="glass-sheet-drawer right-drawer" id="simulatorDrawer" aria-hidden="true">
+        <div class="drawer-header">
+            <div class="drawer-title-group">
+                <i class="fa-solid fa-sliders drawer-icon"></i>
+                <div>
+                    <h2 class="drawer-title">Physics Calibration Simulator</h2>
+                    <p class="drawer-subtitle">Simulate microclimate variations and evaluate hygroscopic swelling corrections</p>
+                </div>
+            </div>
+            <button class="drawer-close-btn" id="closeSimulatorBtn" title="Close Simulator"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="drawer-body">
+            <!-- Real-Time Calibrated Result Card -->
+            <div class="sim-result-card">
+                <div class="sim-res-header">Simulated Model Output</div>
+                <div class="sim-res-main">
+                    <span class="sim-res-num" id="simOutputVal">16.8</span>
+                    <span class="sim-res-unit">µg/m³</span>
+                </div>
+                <div class="sim-res-meta">
+                    <span>Correction Delta: <strong id="simOutputDelta">+2.1 µg/m³</strong></span>
+                    <span class="divider">•</span>
+                    <span>f(RH) Swelling: <strong id="simOutputGrowth">1.18x</strong></span>
+                </div>
+            </div>
+
+            <!-- Sliders List -->
+            <div class="sim-sliders-list">
+                <div class="sim-slider-group">
+                    <div class="slider-label-row">
+                        <span>Raw Optical PM2.5</span>
+                        <span class="slider-cur-val" id="valSimRaw">14.7 µg/m³</span>
+                    </div>
+                    <input type="range" id="sliderSimRaw" min="0" max="200" step="0.5" value="14.7" class="v2-range-slider">
+                </div>
+
+                <div class="sim-slider-group">
+                    <div class="slider-label-row">
+                        <span>Relative Humidity (RH)</span>
+                        <span class="slider-cur-val" id="valSimRH">79.7 %</span>
+                    </div>
+                    <input type="range" id="sliderSimRH" min="10" max="100" step="0.5" value="79.7" class="v2-range-slider">
+                </div>
+
+                <div class="sim-slider-group">
+                    <div class="slider-label-row">
+                        <span>Ambient Temperature</span>
+                        <span class="slider-cur-val" id="valSimTemp">26.3 °C</span>
+                    </div>
+                    <input type="range" id="sliderSimTemp" min="-10" max="50" step="0.5" value="26.3" class="v2-range-slider">
+                </div>
+
+                <div class="sim-slider-group">
+                    <div class="slider-label-row">
+                        <span>Hour of Day (Diurnal Cycle)</span>
+                        <span class="slider-cur-val" id="valSimHour">18:00</span>
+                    </div>
+                    <input type="range" id="sliderSimHour" min="0" max="23" step="1" value="18" class="v2-range-slider">
+                </div>
+
+                <div class="sim-slider-group toggle-row">
+                    <div>
+                        <span class="toggle-title">Harmattan Dust Event Season</span>
+                        <p class="toggle-desc">Activates coarse mineral dust optical scatter correction</p>
+                    </div>
+                    <label class="v2-toggle-switch">
+                        <input type="checkbox" id="toggleSimHarmattan">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ──────────────────────────────────────── MODEL LEADERBOARD MODAL -->
+    <div class="glass-modal-overlay" id="leaderboardModal" aria-hidden="true">
+        <div class="glass-modal-dialog">
+            <div class="drawer-header">
+                <div class="drawer-title-group">
+                    <i class="fa-solid fa-trophy drawer-icon"></i>
+                    <div>
+                        <h2 class="drawer-title">Model Performance Leaderboard</h2>
+                        <p class="drawer-subtitle">Comprehensive benchmarks across validation and held-out test splits</p>
+                    </div>
+                </div>
+                <button class="drawer-close-btn" id="closeLeaderboardBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-table-container">
+                <table class="v2-leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Model Architecture</th>
+                            <th>R² (Val)</th>
+                            <th>MAE (µg/m³)</th>
+                            <th>RMSE</th>
+                            <th>Inference (ms)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="v2LeaderboardBody">
+                        <tr class="active-primary-row">
+                            <td><span class="rank-badge gold">1</span></td>
+                            <td><strong>🏆 SPIME v4 Meta-Ensemble</strong><br><small>StackingRegressor (LightGBM + RF + Ridge)</small></td>
+                            <td><strong class="highlight-val">0.9922</strong></td>
+                            <td>1.04</td>
+                            <td>1.62</td>
+                            <td>4.2 ms</td>
+                            <td><span class="active-badge">Primary Active</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge silver">2</span></td>
+                            <td>Physics-Guided LightGBM<br><small>Non-linear Hygroscopic Multiplier</small></td>
+                            <td>0.9884</td>
+                            <td>1.18</td>
+                            <td>1.84</td>
+                            <td>2.1 ms</td>
+                            <td><span class="ready-badge">Benchmarked</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge bronze">3</span></td>
+                            <td>Calibrated Random Forest<br><small>100 Trees with Dew Point Estimator</small></td>
+                            <td>0.9841</td>
+                            <td>1.32</td>
+                            <td>2.05</td>
+                            <td>8.5 ms</td>
+                            <td><span class="ready-badge">Benchmarked</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge">4</span></td>
+                            <td>Extreme Gradient Boosting (XGBoost)<br><small>Regularized Tree Ensemble</small></td>
+                            <td>0.9815</td>
+                            <td>1.41</td>
+                            <td>2.19</td>
+                            <td>3.4 ms</td>
+                            <td><span class="ready-badge">Benchmarked</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge">5</span></td>
+                            <td>Physics Regularized Ridge<br><small>L2 Linear Baseline with Feature Crosses</small></td>
+                            <td>0.9634</td>
+                            <td>1.89</td>
+                            <td>2.94</td>
+                            <td>0.8 ms</td>
+                            <td><span class="ready-badge">Benchmarked</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── AIRSENSE AI CHAT DRAWER -->
+    <aside class="glass-sheet-drawer right-drawer chat-drawer" id="chatDrawer" aria-hidden="true">
+        <div class="drawer-header">
+            <div class="drawer-title-group">
+                <i class="fa-solid fa-sparkles drawer-icon"></i>
+                <div>
+                    <h2 class="drawer-title">AirSense AI Assistant</h2>
+                    <p class="drawer-subtitle">RAG Conversational Intelligence & Atmospheric Analytics</p>
+                </div>
+            </div>
+            <div class="drawer-header-actions">
+                <button class="drawer-action-btn" id="btnClearChat" title="Clear / Delete Chat Conversation">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Clear Chat</span>
+                </button>
+                <button class="drawer-close-btn" id="closeChatBtn" title="Close Chat"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <div class="chat-drawer-body">
+            <!-- Storage Mode Indicator Pill -->
+            <div class="chat-storage-pill-bar">
+                <span class="chat-storage-badge" id="chatStorageBadge">
+                    <i class="fa-solid fa-hard-drive" id="chatStorageIcon"></i>
+                    <span id="chatStorageText">Browser Storage (Guest Mode)</span>
+                </span>
+                <button class="chat-auth-link-btn" id="chatAuthPromptBtn">
+                    <i class="fa-solid fa-key"></i> <span id="chatAuthPromptText">Sign In with Unique Key</span>
+                </button>
+            </div>
+
+            <!-- Quick Suggestion Prompt Chips -->
+            <div class="chat-chips-scroll">
+                <button class="quick-chip" data-prompt="Can you plot the data stored from this sensor?">Plot Stored Sensor Data</button>
+                <button class="quick-chip" data-prompt="Can you verify the 24h forecasts and plot the verification against actual ground truth?">Verify 24h Forecasts</button>
+                <button class="quick-chip" data-prompt="How does this website work and what features does it have?">Website Guide</button>
+                <button class="quick-chip" data-prompt="How can SPIME be implemented on a PurpleAir PA-II sensor?">PurpleAir Implementation</button>
+                <button class="quick-chip" data-prompt="Plot the Köhler hygroscopic growth curve for me.">Plot Köhler Curve</button>
+                <button class="quick-chip" data-prompt="How do I port SPIME to Plantower PMS5003 or Sensirion SPS30?">Port to Plantower/Sensirion</button>
+                <button class="quick-chip" data-prompt="Explain the architecture of SPIME v4 Ensemble model.">Explain SPIME v4</button>
+                <button class="quick-chip" data-prompt="How does humidity affect the optical sensor readings right now?">Humidity Drift Impact</button>
+            </div>
+
+            <!-- Chat Stream Message Container -->
+            <div class="chat-stream-box" id="v2ChatMessages">
+                <div class="chat-msg assistant-msg">
+                    <div class="msg-avatar"><i class="fa-solid fa-sparkles"></i></div>
+                    <div class="msg-bubble">
+                        Hey there! 👋 I'm <strong>AirSense</strong>, your atmospheric science companion at the Afri-SET station in Legon.
+                        <br><br>
+                        I keep track of our live QuantAQ optical sensor and local weather conditions. Feel free to ask me anything—whether you're curious about today's air quality, how humidity affects our readings, or what our ML models are predicting!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input Dock -->
+            <div class="chat-input-bar">
+                <input type="text" id="v2ChatInput" placeholder="Ask about sensor drift, AQI forecasts, or physics..." class="chat-text-input">
+                <button id="v2ChatSendBtn" class="chat-send-btn" title="Send Question"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ──────────────────────────────────────── USER AUTH MODAL (UNIQUE STRING METHOD) -->
+    <div class="glass-modal-overlay" id="authModal" aria-hidden="true">
+        <div class="glass-modal-dialog auth-dialog">
+            <div class="drawer-header">
+                <div class="drawer-title-group">
+                    <i class="fa-solid fa-key drawer-icon"></i>
+                    <div>
+                        <h2 class="drawer-title" id="authModalTitle">Unique Key Authentication</h2>
+                        <p class="drawer-subtitle">Passwordless access to cloud chat synchronization</p>
+                    </div>
+                </div>
+                <button class="drawer-close-btn" id="closeAuthBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="auth-modal-content">
+                <!-- Logged In Profile View -->
+                <div id="v2AuthLoggedInView" style="display:none;" class="auth-profile-card">
+                    <div class="auth-profile-header">
+                        <div class="user-avatar-lg" id="profileAvatar">U</div>
+                        <div class="user-details-lg">
+                            <h3 id="profileUsername" class="profile-name">Researcher</h3>
+                            <span class="auth-cloud-badge"><i class="fa-solid fa-cloud-check"></i> Cloud Chat Sync Active</span>
+                        </div>
+                    </div>
+                    <div class="unique-key-container">
+                        <label class="key-container-label">Your Unique Access String Key:</label>
+                        <div class="key-display-pill">
+                            <code id="profileUniqueKey" class="unique-key-code">AIR-US-XXXX-YYYY</code>
+                            <button type="button" id="btnCopyProfileKey" class="copy-key-pill-btn" title="Copy Key to Clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <small class="key-hint">Save this unique key to authenticate on any device without a password.</small>
+                    </div>
+                    <div class="auth-actions-group">
+                        <button type="button" id="btnLogoutBtn" class="drawer-btn-danger full-width">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Guest / Logged Out View with Tabs -->
+                <div id="v2AuthLoggedOutView">
+                    <div class="auth-tabs-bar">
+                        <button type="button" class="auth-tab-btn active" id="tabBtnSignIn">Sign In with Key</button>
+                        <button type="button" class="auth-tab-btn" id="tabBtnGenerate">Create New Key</button>
+                    </div>
+
+                    <!-- Panel 1: Authenticate with existing key -->
+                    <div class="auth-tab-panel active" id="tabPanelSignIn">
+                        <form id="v2KeyLoginForm" class="v2-form">
+                            <div class="form-field">
+                                <label for="v2LoginKeyInput">Enter Unique Access Key</label>
+                                <input type="text" id="v2LoginKeyInput" placeholder="e.g. AIR-US-B83A-79F1" required class="drawer-input mono-font" autocomplete="off">
+                                <small class="form-field-hint">Paste your unique key to restore cloud chat history.</small>
+                            </div>
+                            <div id="v2AuthError" class="auth-error-msg" style="display:none;"></div>
+                            <button type="submit" class="drawer-btn-primary full-width" id="btnSubmitKeyLogin">
+                                <i class="fa-solid fa-right-to-bracket"></i> Authenticate with Key
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Panel 2: Generate brand new key -->
+                    <div class="auth-tab-panel" id="tabPanelGenerate" style="display:none;">
+                        <form id="v2KeyGenerateForm" class="v2-form">
+                            <div class="form-field">
+                                <label for="v2GenUsername">Display Name (Optional)</label>
+                                <input type="text" id="v2GenUsername" placeholder="e.g. Researcher Hughes" class="drawer-input">
+                            </div>
+                            <div class="form-field">
+                                <label for="v2CustomKey">Custom Key String (Optional, leave blank to auto-generate)</label>
+                                <input type="text" id="v2CustomKey" placeholder="e.g. AIR-US-MYCUSTOMKEY" class="drawer-input mono-font">
+                            </div>
+                            <div id="v2GenError" class="auth-error-msg" style="display:none;"></div>
+                            <button type="submit" class="drawer-btn-accent full-width" id="btnSubmitGenKey">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Key & Sign In
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── CHAT PLOT LIGHTBOX MODAL -->
+    <div class="plot-lightbox-modal" id="plotLightboxModal" aria-hidden="true">
+        <div class="plot-lightbox-content">
+            <button class="plot-lightbox-close" id="closePlotLightboxBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <img id="plotLightboxImg" src="" alt="AirSense Generated Plot" class="plot-lightbox-img">
+            <div class="plot-lightbox-bar">
+                <a id="plotDownloadBtn" href="" download="airsense_plot.png" class="plot-lightbox-btn">
+                    <i class="fa-solid fa-download"></i> Download Plot
+                </a>
+                <button class="plot-lightbox-btn" id="plotLightboxCloseAction">
+                    <i class="fa-solid fa-check"></i> Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="{{ url_for('static', filename='v2.js') }}"></script>
+</body>
+</html>

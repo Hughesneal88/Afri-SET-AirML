@@ -15,7 +15,32 @@ quantaq_client = QuantAQClient(PROJECT_DIR)
 
 @views_bp.route('/')
 def index():
-    return render_template('index.html')
+    """
+    Version 2 Primary Studio: Minimalist Atmospheric Glassmorphic Studio.
+    """
+    return render_template('v2.html', telemetry=None, models_list=[])
+
+@views_bp.route('/v2')
+def index_v2():
+    """
+    Alias for Version 2 Studio.
+    """
+    return render_template('v2.html', telemetry=None, models_list=[])
+
+@views_bp.route('/classic')
+@views_bp.route('/v1')
+def index_v1():
+    """
+    Legacy Version 1 Interface Archive.
+    """
+    return render_template('index.html', telemetry=None, models_list=[])
+
+@views_bp.route('/plot')
+def plot_standalone():
+    """
+    Dedicated Full-Viewport Standalone Time-Series Plotly View for Version 2.
+    """
+    return render_template('plot_standalone.html')
 
 @views_bp.route('/health', methods=['GET'])
 def health_check():

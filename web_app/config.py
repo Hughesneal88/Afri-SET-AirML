@@ -41,28 +41,33 @@ class Config:
     }
 
     DISTINCT_MODEL_CONFIG = {
+        "stacked_physics_meta_ensemble": {
+            "name": "🏆 SPIME v4 Ensemble",
+            "file_names": ["stacked_physics_meta_ensemble.joblib"],
+            "features": 75
+        },
         "random_forest_pm25_model_update2": {
-            "name": "⭐ Random Forest Regressor (BEST MODEL - R² = 0.902)",
+            "name": "Random Forest v2",
             "file_names": ["random_forest_pm25_model_update2.joblib", "random_forest_tuned.joblib"],
             "features": 11
         },
         "two_stage_purged_calibrator": {
-            "name": "Two-Stage Purged Calibrator (RF + LightGBM Residual)",
+            "name": "Two-Stage Purged Calibrator",
             "file_names": ["two_stage_purged_calibrator.joblib"],
             "features": 8
         },
         "pmc_hybrid_calibrator": {
-            "name": "PMC12115728 Paper Calibrator (kNN + GBR + RF)",
+            "name": "PMC Hybrid Calibrator",
             "file_names": ["pmc_hybrid_calibrator.joblib"],
             "features": 10
         },
         "moe_expert_model": {
-            "name": "Atmospheric Mixture of Experts (MoE Ensemble)",
+            "name": "Atmospheric MoE",
             "file_names": ["moe_expert_model.joblib"],
             "features": 14
         },
         "compact_generalization_rf": {
-            "name": "Compact Generalization RF (5-Feature Baseline)",
+            "name": "Compact Generalization RF",
             "file_names": ["compact_generalization_rf.joblib"],
             "features": 5
         }

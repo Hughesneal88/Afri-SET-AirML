@@ -1,0 +1,35 @@
+{
+  "models": [
+    {
+      "features": 75,
+      "key": "stacked_physics_meta_ensemble",
+      "name": "\ud83c\udfc6 SPIME v4 Ensemble"
+    },
+    {
+      "features": 11,
+      "key": "random_forest_pm25_model_update2",
+      "name": "Random Forest v2"
+    },
+    {
+      "features": 8,
+      "key": "two_stage_purged_calibrator",
+      "name": "Two-Stage Purged Calibrator"
+    },
+    {
+      "features": 10,
+      "key": "pmc_hybrid_calibrator",
+      "name": "PMC Hybrid Calibrator"
+    },
+    {
+      "features": 14,
+      "key": "moe_expert_model",
+      "name": "Atmospheric MoE"
+    },
+    {
+      "features": 5,
+      "key": "compact_generalization_rf",
+      "name": "Compact Generalization RF"
+    }
+  ],
+  "status": "success"
+}

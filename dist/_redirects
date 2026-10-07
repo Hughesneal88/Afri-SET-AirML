@@ -1,0 +1,9 @@
+# Netlify Clean URLs and Routing Rules
+/api/chat       /.netlify/functions/chat 200
+/plot           /plot.html              200
+/v2             /index.html             200
+/api/models     /data/models.json       200
+/api/live_telemetry /data/telemetry.json 200
+
+# Optional: If you deploy your Flask backend to Render/Railway, proxy all /api calls:
+# /api/*  https://YOUR-FLASK-APP.onrender.com/api/:splat  200

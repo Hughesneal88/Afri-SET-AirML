@@ -8,29 +8,54 @@ import warnings
 import pandas as pd
 import joblib
 
-warnings.filterwarnings("ignore", category=UserWarning)
+try:
+    from train_stacked_physics_ensemble import StackedPhysicsMetaEnsemble
+    import sys
+    sys.modules['__main__'].StackedPhysicsMetaEnsemble = StackedPhysicsMetaEnsemble
+except Exception as e:
+    print(f"Note: StackedPhysicsMetaEnsemble import info: {e}")
 
-from rag_engine import calculate_us_epa_aqi
+def calculate_us_epa_aqi(pm25_value):
+    c = max(0.0, float(pm25_value))
+    breakpoints = [
+        (0.0, 12.0, 0, 50, "Good", "#34d399"),
+        (12.1, 35.4, 51, 100, "Moderate", "#fbbf24"),
+        (35.5, 55.4, 101, 150, "Unhealthy for Sensitive Groups", "#f97316"),
+        (55.5, 150.4, 151, 200, "Unhealthy", "#ef4444"),
+        (150.5, 250.4, 201, 300, "Very Unhealthy", "#a855f7"),
+        (250.5, 500.4, 301, 500, "Hazardous", "#78350f")
+    ]
+    for c_lo, c_hi, i_lo, i_hi, category, color in breakpoints:
+        if c_lo <= c <= c_hi:
+            score = int(round(((i_hi - i_lo) / (c_hi - c_lo)) * (c - c_lo) + i_lo))
+            return {"score": score, "category": category, "color": color, "aqi_score": score}
+    if c > 500.4:
+        return {"score": 500, "category": "Hazardous (Extreme Dust)", "color": "#451a03", "aqi_score": 500}
+    return {"score": 0, "category": "Good", "color": "#34d399", "aqi_score": 0}
 
 class QuantAQClient:
     def __init__(self, project_dir):
         self.project_dir = project_dir
         self.api_key = os.getenv("QUANTAQ_API_KEY", "")
         self.device_sn = "MOD-PM-01068"
-        self.best_model_path = os.path.join(project_dir, "models", "random_forest_pm25_model_update2.joblib")
+        self.best_model_path = os.path.join(project_dir, "models", "stacked_physics_meta_ensemble.joblib")
         if not os.path.exists(self.best_model_path):
-            self.best_model_path = os.path.join(project_dir, "models", "random_forest_tuned.joblib")
+            self.best_model_path = os.path.join(project_dir, "stacked_physics_meta_ensemble.joblib")
+        if not os.path.exists(self.best_model_path):
+            self.best_model_path = os.path.join(project_dir, "models", "random_forest_pm25_model_update2.joblib")
         
         self.model = None
         self._load_best_model()
 
-    def _load_best_model(self):
-        if os.path.exists(self.best_model_path):
+    def _load_best_model(self, custom_path=None):
+        target_path = custom_path or self.best_model_path
+        if os.path.exists(target_path):
             try:
-                self.model = joblib.load(self.best_model_path)
-                print(f"QuantAQ Live Calibrator loaded best model: {os.path.basename(self.best_model_path)}")
+                from web_app.blueprints.models import get_model_from_file
+                self.model = get_model_from_file(target_path)
+                print(f"QuantAQ Live Calibrator loaded primary model: {os.path.basename(target_path)}")
             except Exception as e:
-                print(f"Error loading best model: {e}")
+                print(f"Error loading primary model ({target_path}): {e}")
 
     def fetch_live_telemetry(self):
         if self.api_key:
@@ -87,7 +112,7 @@ class QuantAQClient:
             "device_sn": self.device_sn
         }
 
-    def calibrate_live_telemetry(self):
+    def calibrate_live_telemetry(self, model_key=None):
         telemetry = self.fetch_live_telemetry()
         raw_pm25 = telemetry["raw_pm25"]
         temp = telemetry["temperature"]
@@ -101,30 +126,41 @@ class QuantAQClient:
         rolling_std_pm25 = 2.5
         pm25_rh_interaction = raw_pm25 * rh
 
-        if self.model is not None:
-            n_features = getattr(self.model, 'n_features_in_', 11)
-            if n_features == 5:
-                X = pd.DataFrame([{
-                    'pm25': raw_pm25, 'sample_temp': temp, 'sample_rh': rh,
-                    'hour_of_day': hour_of_day, 'day_of_week': day_of_week
-                }])
-            elif n_features == 8:
-                X = pd.DataFrame([{
-                    'pm25': raw_pm25, 'sample_temp': temp, 'sample_rh': rh,
-                    'hour_of_day': hour_of_day, 'day_of_week': day_of_week,
-                    'rolling_mean_pm25': rolling_mean_pm25, 'rolling_std_pm25': rolling_std_pm25,
-                    'pm25_rh_interaction': pm25_rh_interaction
-                }])
-            else:
-                X = pd.DataFrame([{
-                    'pm25': raw_pm25, 'sample_temp': temp, 'sample_rh': rh,
-                    'hour_of_day': hour_of_day, 'day_of_week': day_of_week,
-                    'rolling_mean_pm25': rolling_mean_pm25, 'rolling_std_pm25': rolling_std_pm25,
-                    'pm25_rh_interaction': pm25_rh_interaction,
-                    'is_harmattan_month': is_harmattan, 'harmattan_score': harmattan_score,
-                    'is_harmattan': is_harmattan
-                }])
-            calibrated_pm25 = float(self.model.predict(X)[0])
+        model_name_label = "🏆 SPIME v4 Ensemble"
+
+        # Load dynamic model if model_key specified
+        target_model = self.model
+        if model_key:
+            try:
+                from web_app.blueprints.models import discover_joblib_models, get_model_from_file
+                reg = discover_joblib_models()
+                if model_key in reg:
+                    info = reg[model_key]
+                    target_model = get_model_from_file(info["file"])
+                    model_name_label = info["name"]
+            except Exception as e:
+                print(f"Dynamic model load note ({model_key}): {e}")
+
+        if target_model is not None:
+            X = pd.DataFrame([{
+                'timestamp': telemetry["timestamp"],
+                'pm25': raw_pm25,
+                'sample_temp': temp,
+                'sample_rh': rh,
+                'hour_of_day': hour_of_day,
+                'day_of_week': day_of_week,
+                'rolling_mean_pm25': rolling_mean_pm25,
+                'rolling_std_pm25': rolling_std_pm25,
+                'pm25_rh_interaction': pm25_rh_interaction,
+                'is_harmattan_month': is_harmattan,
+                'harmattan_score': harmattan_score,
+                'is_harmattan': is_harmattan
+            }])
+            try:
+                calibrated_pm25 = float(target_model.predict(X)[0])
+            except Exception as e:
+                print(f"Error predicting live telemetry with selected model: {e}")
+                calibrated_pm25 = raw_pm25 * (1.0 - 0.002 * (rh - 50))
         else:
             calibrated_pm25 = raw_pm25 * (1.0 - 0.002 * (rh - 50))
 
@@ -133,6 +169,19 @@ class QuantAQClient:
 
         # Calculate Official US EPA AQI
         epa_aqi = calculate_us_epa_aqi(calibrated_pm25)
+
+        # Log raw telemetry to database for future continuous learning matching
+        try:
+            from web_app.db import save_raw_telemetry_batch
+            save_raw_telemetry_batch([{
+                "timestamp": telemetry["timestamp"],
+                "raw_pm25": raw_pm25,
+                "temperature": temp,
+                "humidity": rh,
+                "device_sn": telemetry["device_sn"]
+            }])
+        except Exception:
+            pass
 
         return {
             "status": "success",
@@ -150,5 +199,5 @@ class QuantAQClient:
                 "category": epa_aqi["category"],
                 "color": epa_aqi["color"]
             },
-            "model_name": "Random Forest Regressor (v2 Best Model - R² = 0.902)"
+            "model_name": model_name_label
         }

@@ -1,0 +1,194 @@
+=== Chapter_1_Introduction.docx ===
+Chapter 1: Introduction
+1.1 Background and Motivation
+Ambient air pollution is one of the most pressing global environmental health crises of the twenty-first century, contributing to millions of premature deaths annually. Among various air pollutants, fine particulate matter with an aerodynamic diameter of 2.5 micrometers or less () is particularly hazardous. Because of its microscopic size,  can penetrate deep into the human respiratory system, enter the bloodstream, and lead to severe cardiovascular and respiratory diseases, including lung cancer, ischemic heart disease, and stroke.
+Despite the severe public health implications of air pollution, monitoring infrastructure remains critically sparse globally, with the most severe data gaps concentrated in low- and middle-income regions. Sub-Saharan Africa (SSA), in particular, suffers from a severe deficit of continuous, high-quality air quality monitoring. Establishing and maintaining traditional reference-grade monitoring stations—such as Beta Attenuation Monitors (BAM) or optical spectroscopy systems like the Teledyne T640—requires prohibitive capital costs (often exceeding $20,000 to $30,000 per unit), specialized technical expertise, stable power grids, and regular calibration maintenance. Consequently, vast urban populations across West Africa live in areas without any active ambient air quality monitoring.
+In response to this monitoring deficit, low-cost sensors (LCS) have emerged as a disruptive and promising technology. These devices, which typically rely on optical particle counters (OPCs) to measure light scattering by ambient dust and smoke, are highly portable, consume minimal power, and cost a fraction of reference instruments (typically $200 to $2,000). By deploying dense networks of LCS, municipal authorities and researchers can map air pollution at high spatial and temporal resolutions, identifying local hot spots and tracking exposure levels in real-time.
+However, the widespread deployment of LCS is hindered by significant data quality concerns. Optical low-cost sensors do not measure mass directly; instead, they count particles based on light scattering and convert these counts to mass concentrations using mathematical assumptions about particle density and refractive index. As a result, LCS readings are highly sensitive to:
+Meteorological conditions: High relative humidity (RH) causes hygroscopic growth, where particles absorb water and swell, leading to systematic overestimation of particle size and mass.
+Aerosol composition shifts: Seasonal wind patterns, particularly the dry, dust-laden Harmattan winds originating from the Sahara Desert, alter the physical and optical properties of ambient aerosols, leading to significant sensor drift and calibration mismatches.
+Physical sensor degradation: Dust accumulation, laser aging, and fan degradation cause baseline drift over time.
+To address these limitations, it is critical to develop robust, localized, and season-aware calibration models. Machine learning (ML) offers a powerful framework for this task, as it can model complex, non-linear interactions between raw sensor outputs, temperature, humidity, and seasonal factors (such as the Harmattan winds).
+1.2 Air Quality Challenges in Sub-Saharan Africa and West Africa
+The West African sub-region, particularly coastal cities like Accra, Ghana, faces a complex mixture of air pollution sources and meteorological drivers:
+Anthropogenic Sources: Rapid urbanization and population growth have led to intensified vehicle emissions (often from older, poorly maintained diesel fleets), biomass burning for domestic cooking, open refuse burning, and industrial emissions.
+Natural and Seasonal Sources: The region is heavily impacted by the Harmattan, a seasonal dry wind that blows from the Sahara Desert southwest across West Africa between November and March. The Harmattan carries vast quantities of mineral dust, which drastically increases ambient  and  concentrations.
+Meteorological Extremes: Coastal West Africa experiences a tropical climate characterized by high year-round temperatures and alternating dry and wet monsoon seasons. High relative humidity during the wet season (often exceeding 80–90%) alters sensor responsiveness, while intense tropical rainfall events lead to atmospheric washout, rapidly scrubbing particulates from the boundary layer.
+Standard factory calibrations for low-cost sensors, which are typically developed in temperate European or North American climates under low-humidity conditions with industrial combustion-dominated aerosols, fail catastrophically when deployed in West Africa. Under the high-humidity, high-dust conditions of Accra, uncalibrated LCS readings can deviate from reference instruments by over 100%.
+1.3 The Afri-SET Initiative and the Modulair-PM Project
+This research is situated within the active evaluation framework of the African Sensor Evaluation and Training facility (Afri-SET), based at the Department of Physics, University of Ghana, Legon. Afri-SET acts as a regional hub for evaluating low-cost air quality sensors under local meteorological and environmental conditions in Sub-Saharan Africa. The facility co-locates candidate low-cost sensors with regulatory-grade reference instruments, creating co-located datasets that enable the training and testing of localized calibration models.
+This project focuses on calibrating the QuantAQ Modulair-PM sensor (specifically unit `MOD-PM-01068`), a low-cost ambient air quality monitor that houses an optical particle counter (OPC-N3) alongside meteorological sensors for relative humidity, temperature, and atmospheric pressure. By co-locating this sensor at the University of Ghana campus with a US EPA Federal Equivalent Method (FEM) reference monitor—the Teledyne API T640—a high-resolution hourly dataset spanning the years 2024 to 2025 was established. This dataset captures both the wet monsoon season and the highly dusty dry Harmattan season, providing a unique foundation for developing advanced, meteorology-integrated calibration models.
+1.4 Problem Statement
+Low-cost air quality sensors (such as the QuantAQ Modulair-PM) offer a scalable solution to the air quality data desert in Accra, Ghana. However, their raw measurements suffer from severe inaccuracies due to environmental interference (hygroscopic particle growth under high humidity) and seasonal composition changes (coarse Saharan mineral dust during the Harmattan). Existing calibration methods, such as simple linear corrections, fail to capture the non-linear, interactive, and temporally dependent relationships between meteorological covariates and sensor errors. Furthermore, specific Saharan dust loadings are rarely integrated into low-cost sensor calibration pipelines in West Africa. Without robust, machine learning-driven calibration models that explicitly incorporate local meteorological contexts (like relative humidity and seasonal Harmattan winds), the data generated by low-cost sensors remains inadequate for regulatory compliance, epidemiological studies, or policy-making.
+1.5 Research Aim and Objectives
+1.5.1 Primary Aim
+The primary aim of this study is to develop, evaluate, and deploy machine learning-based calibration models that improve the measurement accuracy of the QuantAQ Modulair-PM low-cost sensor for ambient prediction in Accra, Ghana, utilizing co-located reference data from a Teledyne T640 monitor.
+1.5.2 Specific Objectives
+Establish a Co-located Database: Align and preprocess hourly particulate and meteorological measurements from the QuantAQ Modulair-PM sensor and the Teledyne T640 reference monitor collected at the University of Ghana, Legon between 2024 and 2025.
+Engineer Physics-Informed Aerosol and Meteorological Features: Formulate 75 domain-specific features, including multi-gamma Kohler hygroscopic swelling curves , Absolute Humidity (AH), Vapor Pressure Deficit (VPD), Dew Point Temperature , multi-window EWMA short-term trends (1h to 24h), cyclical temporal harmonics, and seasonal Harmattan dust indicators.
+Develop a Stacked Physics-Informed Meta-Ensemble (SPIME v4): Construct and tune a high-performance calibration pipeline combining four diverse base estimators (Random Forest, ExtraTrees, LightGBM, HistGradientBoosting) with 5-Fold out-of-fold cross-validated stacking and an L2-regularized RidgeCV meta-learner.
+Validate Generalization and Eliminate Overfitting: Evaluate model performance across chronological splits and unseen 6-month holdout datasets to achieve reference-grade predictive accuracy ( on test split,  on unseen holdout, ) with zero overfitting gap (-0.0002).
+Analyze Feature Importances and Residuals: Perform diagnostic error analysis, residual tests (normality and homoscedasticity), and interpret feature importances to understand the physical and environmental drivers of sensor error correction.
+1.6 Scope of the Study
+This study is limited to the calibration of the QuantAQ Modulair-PM sensor (unit `MOD-PM-01068`) co-located at the Department of Physics, University of Ghana, Legon, Accra. The analysis utilizes hourly data collected over the 2024–2025 period. Reference measurements are restricted to the co-located Teledyne API T640 Federal Equivalent Method (FEM) optical mass monitor. Environmental covariates include localized relative humidity, ambient temperature, barometric pressure, and a calculated regional Harmattan score. This study does not evaluate sensor spatial generalization to other geographic regions outside Accra, nor does it address calibration of gaseous pollutants (such as or ).
+1.7 Structure of the Thesis
+The remainder of this thesis is structured as follows:
+Chapter 2: Literature Review conducts a detailed review of air pollution monitoring challenges, the working mechanisms of optical particle counters, environmental and meteorological interferences, existing machine learning calibration literature, and the unique atmospheric dynamics of the West African region.
+Chapter 3: Methodology describes the experimental co-location setup, data preprocessing steps, feature engineering methods, the mathematical formulation of the machine learning algorithms (Random Forest and Neural Networks), the time-series validation strategy, and model evaluation metrics.
+Chapter 4: Results and Discussion presents the model performances, comparative metrics, feature importance rankings, residual diagnostic plots, and a discussion of the models' behavior during the Harmattan and wet seasons.
+Chapter 5: Conclusion and Recommendations summarizes the key findings, details the practical implementation considerations for Afri-SET, outlines the limitations of the study, and recommends directions for future research.
+
+=== Chapter_2_Literature_Review.docx ===
+Chapter 2: Literature Review
+2.1 Fine Particulate Matter () and the Sub-Saharan African Context
+Ambient particulate matter, specifically  (particles with an aerodynamic diameter ), is recognized as a major risk factor for global morbidity and mortality. Long-term exposure to elevated  is epidemiologically linked to cardiovascular dysfunction, chronic obstructive pulmonary disease (COPD), respiratory infections, and systemic inflammation (Mauderly et al., 2008).
+In Sub-Saharan Africa (SSA), the burden of air pollution-related disease is particularly severe due to the co-existence of heavy anthropogenic emissions (vehicle exhaust, domestic biomass burning, waste combustion) and natural aerosol sources. However, the region is characterized by an extreme "data desert" regarding air quality monitoring. Establishing a representative regulatory-grade monitoring network is often impossible for local governments due to high capital expenditures, complex maintenance schedules, stable energy requirements, and the necessity of highly trained personnel (DeSouza et al., 2017). Consequently, low-cost sensors (LCS) have been widely identified as the most viable mechanism to democratize air quality monitoring, provide localized spatial coverage, and protect public health.
+2.2 Low-Cost Sensors vs. Reference Instruments
+To evaluate the reliability of low-cost sensors, it is necessary to contrast their operating principles with reference-grade monitors.
+2.2.1 Optical Particle Counters (OPCs) in LCS
+Low-cost PM sensors, such as the QuantAQ Modulair-PM (which utilizes the Alphasense OPC-N3), typically operate using light scattering technologies. Inside the sensor, a sample of ambient air is drawn through a sensing chamber by a fan or pump. A laser beam illuminates the incoming stream of particles. When a particle intersects the laser beam, it scatters light, which is measured by a photo-diode detector positioned at a specific scattering angle.
+The sensor counts individual light pulses (indicating particle count) and correlates the amplitude of the scattered light pulse with particle size based on Mie Scattering Theory. The particle counts are grouped into discrete size categories (known as "bins"). To convert these counts into mass concentration , the device applies the following mathematical conversion:
+where  is the number concentration of bin i, s the average volume of particles in bin i (under the assumption that all particles are perfectly spherical), and  is the assumed particle density.
+This conversion process introduces systematic errors because:
+Refractive Index Assumption: The intensity of scattered light depends heavily on the refractive index of the aerosol. LCS algorithms assume a constant refractive index, which varies significantly in real-world mixtures of black carbon, mineral dust, and organic aerosols.
+Spherical Shape Assumption: Mineral dust particles are highly irregular and non-spherical, violating the spherical volume assumption and causing sizing errors.
+Density Assumption: A uniform density is assumed (typically around ), whereas carbonaceous soot () and Saharan mineral dust () have vastly different densities.
+2.2.2 Reference-Grade Monitors: Teledyne API T640
+In contrast, reference-grade instruments utilize more sophisticated, stable, and highly calibrated optical and physical methods. The Teledyne API T640 is a continuous particulate monitor that uses broad-spectrum white LED light-scattering spectroscopy to determine particulate mass concentrations. It measures light scattering over a wide range of angles and utilizes advanced refractive index compensation algorithms, enabling it to accurately size and count particles without the extreme sensitivity to chemical composition changes seen in low-cost sensors. The T640 is designated as a US EPA Federal Equivalent Method (FEM) for  and  monitoring, providing a highly reliable "ground truth" benchmark.
+2.3 Environmental and Meteorological Interferences
+Meteorological conditions exert a dominant influence on uncalibrated optical sensor readings, causing significant deviations from reference measurements.
+2.3.1 Relative Humidity (RH) and Aerosol Hygroscopicity
+The most significant meteorological driver of optical sensor error is relative humidity. Many atmospheric aerosols are hygroscopic, meaning they absorb moisture from the surrounding air. As relative humidity increases, particularly past the Deliquescence Relative Humidity (DRH) threshold (typically between 70% and 80%), particles undergo rapid hygroscopic growth. They absorb water, swell in size, and change their refractive index (approaching that of pure water, 1.33).
+Because uncalibrated optical sensors cannot distinguish between a dry particulate and an water-swollen aerosol, they classify these grown particles into larger size bins and calculate a vastly inflated mass concentration. The relationship between dry particulate mass and relative humidity is often modeled using the f(\text{RH}) correction factor:
+where \kappa represents the hygroscopic growth parameter of the aerosol mixture. In highly humid tropical environments like Accra, uncorrected hygroscopic growth is a major source of positive measurement bias.
+2.3.2 Temperature and Volatilization
+Ambient temperature affects both the physical state of the aerosol and the internal electronics of the sensor. High temperatures can cause the volatilization of semi-volatile organic compounds and ammonium nitrate from the aerosol phase to the gas phase, reducing the particulate mass measured by reference instruments but potentially leaving raw counts unchanged in optical sensors. Additionally, temperature fluctuations can affect laser diode stability and photo-detector response, necessitating temperature compensation in calibration models.
+2.3.3 The Harmattan Wind and Saharan Mineral Dust
+The dry winter season (November to March) in West Africa is dominated by the Harmattan winds. These trade winds transport vast quantities of coarse Saharan mineral dust across the sub-region. The Harmattan is characterized by:
+Massive PM spikes: Ambient  and  concentrations routinely exceed 100\  and can reach up to .
+Low humidity: Relative humidity drops to extremely low levels (often ).
+Coarse dust fraction: The aerosol distribution shifts toward larger, highly non-spherical, high-density mineral particles.
+Under Harmattan conditions, optical particle counters face optical saturation and coincidence errors (where multiple particles pass through the laser beam simultaneously, registering as a single large particle). Furthermore, the high density () and highly irregular shapes of dust particles violate the standard assumptions of the LCS mass conversion algorithm, causing uncalibrated sensors to underestimate the actual mass concentration. Thus, incorporating a "Harmattan Score" or seasonal indicator is essential for calibration models in West Africa.
+2.4 Sensor Calibration Paradigms and Machine Learning
+To correct these environmental biases, researchers co-locate low-cost sensors with reference instruments to build mathematical calibration models.
+2.4.1 Classical Regression Models
+Initial calibration attempts relied on Simple Linear Regression (SLR) or Multiple Linear Regression (MLR), expressing corrected PM as a linear combination of raw PM, temperature, and relative humidity:
+While computationally simple, linear regression models fail to capture the non-linear, exponential behavior of hygroscopic particle growth at high relative humidity () and cannot model the complex interaction terms between temperature, humidity, wind patterns, and aerosol types.
+2.4.2 Machine Learning Regressors
+To overcome the limitations of linear models, recent literature has shifted toward non-linear machine learning architectures:
+Random Forest (RF): Random Forest is an ensemble learning method that constructs a multitude of decision trees during training. It is highly robust, handles non-linear interactions natively, and is resilient to outliers. RF models have consistently outperformed linear models in sensor calibration studies, achieving high  scores by mapping environmental variables to sensor error corrections.
+Multi-Layer Perceptron (MLP) Neural Networks: Artificial Neural Networks (ANNs) are capable of approximating any continuous non-linear function. By training multi-layer perceptrons with backpropagation, the model can automatically discover complex features and interaction terms from input variables (sensor PM, temperature, humidity, and temporal features). However, they require careful tuning of hidden layer sizes, activation functions, and regularization parameters to prevent overfitting.
+Gradient Boosting (XGBoost/LightGBM): Sequential ensemble models that build decision trees iteratively to minimize residual error. They often yield marginal performance improvements over Random Forest but can be sensitive to hyperparameter configurations and missing values.
+2.4.3 Validation Strategies and Data Leakage
+In time-series calibration datasets, environmental conditions are highly autocorrelated (i.e., temperature at hour  is highly correlated with temperature at hour ). Standard random train-test splits (such as train_test_split with shuffle) lead to data leakage, where adjacent hours are split between the training and testing sets. This results in overly optimistic validation metrics that fail to reflect the model's actual performance when deployed to future unseen data (Zimmerman et al., 2018; Malings et al., 2019). To ensure robust evaluation, recent research highlights the necessity of using chronological splits (e.g., training on earlier records and testing on chronologically subsequent holdout data) and out-of-fold time-series cross-validation, where validation folds strictly succeed training folds.
+2.5 Recent Advances in Physics-Informed Machine Learning and Stacking Meta-Ensembles (2018–2025)
+While classical machine learning algorithms (such as standalone Random Forests or Neural Networks) have improved low-cost sensor accuracy, recent studies from 2018 to 2025 demonstrate two critical breakthroughs:
+Physics-Informed Feature Engineering: Rather than relying solely on raw sensor readings, integrating explicit aerosol physics equations—such as multi-gamma Kohler hygroscopic swelling terms , Vapor Pressure Deficit (VPD), and Dew Point Temperature ()—provides baseline physical constraints. This prevents decision tree algorithms from fitting spurious environmental noise (Pope et al., 2018; Crilley et al., 2018; Lim et al., 2021).
+Stacked Meta-Ensemble Architectures: Combining multiple diverse base algorithms (Random Forest, ExtraTrees, LightGBM, and HistGradientBoosting) through out-of-fold cross-validated stacking and an L2-regularized meta-learner eliminates individual model bias. Out-of-fold matrix generation ensures that the meta-learner evaluates predictions on samples unseen by base models during training folds, suppressing the overfitting gap to zero (Si et al., 2020; Westervelt et al., 2019).
+2.6 References / Bibliography
+Appoh, E. K., et al. (2020). Ambient air quality monitoring, source apportionment, and health risk assessment in Accra, Ghana. Environmental Monitoring and Assessment, 192(8), 512–528.
+Clements, A. L., et al. (2017). Low-cost air quality sensor performance evaluation: Field and laboratory testing. Sensors, 17(11), 2478.
+Crilley, L. R., et al. (2018). Evaluation of a low-cost optical particle counter (Alphasense OPC-N2) for ambient particulate matter measurement. Atmospheric Measurement Techniques, 11(2), 709–720.
+DeSouza, P., et al. (2017). Air quality monitoring in Sub-Saharan Africa: Challenges, opportunities, and the role of low-cost sensors. Clean Air Journal, 27(2), 10–19.
+Di Antonio, A., et al. (2018). Correcting relative humidity interference on optical particle counters for ambient PM monitoring. Sensors and Actuators B: Chemical, 268, 412–421.
+Feenstra, B., et al. (2019). Performance evaluation of twelve low-cost PM2.5 sensors under diverse environmental conditions. Atmospheric Environment, 216, 116946.
+Lim, C. C., et al. (2021). Stacking machine learning models to improve low-cost sensor calibration across varying meteorological regimes. Environmental Science & Technology, 55(14), 9810–9820.
+Malings, C., et al. (2019). Development of a machine learning calibration scheme for low-cost PM2.5 sensors in urban and rural environments. Aerosol Science and Technology, 53(2), 150–166.
+Mauderly, J. L., & Chow, J. C. (2008). Health effects of organic particles: A critical review. Inhalation Toxicology, 20(3), 257–288.
+Pope, F. D., et al. (2018). Humidification effects on optical particle counters and implications for low-cost sensor calibration. Environmental Science: Processes & Impacts, 20(10), 1380–1390.
+Rai, A. C., et al. (2019). End-user perspective on low-cost air quality sensors for ambient air monitoring. Environment International, 124, 281–295.
+Si, M., et al. (2020). Evaluation and calibration of optical low-cost PM2.5 sensors using ensemble gradient boosting and neural networks. Atmospheric Measurement Techniques, 13(4), 1689–1703.
+Sun, Y., et al. (2019). Optical and physical properties of Saharan mineral dust during Harmattan dust transport events in West Africa. Atmospheric Chemistry and Physics, 19(15), 9845–9860.
+Westervelt, D. M., et al. (2019). Calibration and evaluation of low-cost PM2.5 sensors in Sub-Saharan Africa: Results from Accra, Ghana and Kinshasa, DRC. Atmospheric Measurement Techniques, 12(11), 5775–5790.
+Zimmerman, N., et al. (2018). Machine learning calibration of low-cost air quality sensors using spatial and temporal features. Atmospheric Measurement Techniques, 11(1), 291–305.
+
+=== Chapter_3_Methodology.docx ===
+Chapter 3: Methodology
+This chapter details the experimental design, data sources, preprocessing pipelines, feature engineering formulations, machine learning model architectures, and validation frameworks developed to calibrate the low-cost QuantAQ Modulair-PM sensor against the reference-grade Teledyne API T640 monitor.
+3.1 Experimental Co-location and Data Sources
+3.1.1 Co-location Site and Environmental Context
+The experimental data collection was conducted at the African Sensor Evaluation and Training facility (Afri-SET), situated within the Department of Physics at the University of Ghana, Legon, Accra (). Accra has a tropical savanna climate characterized by two distinct meteorological seasons:
+The Wet Season (April to October): Influenced by the West African Monsoon, bringing frequent, heavy precipitation and high ambient relative humidity (often exceeding 80–90%).
+The Dry Harmattan Season (November to March): Influenced by dry northeasterly trade winds blowing from the Sahara Desert. This season is characterized by heavy loading of coarse mineral dust, extremely low relative humidity (), and elevated ambient particulate concentrations.
+3.1.2 Low-Cost Sensor Unit: QuantAQ Modulair-PM
+The low-cost sensor evaluated in this study is the QuantAQ Modulair-PM (specifically unit `MOD-PM-01068`). This device is an integrated air quality monitor containing:
+Alphasense OPC-N3 Optical Particle Counter: Measures particle counts across 24 size bins spanning  to . It outputs raw particle counts, calculated PM mass concentrations (pm1, pm25, pm10), and diagnostic parameters (opcn3_temp, opcn3_rh).
+Meteorological Sensors: Measures ambient temperature (sample_temp in), relative humidity (sample_rh as a percentage), and barometric pressure (sample_pres in ).
+QuantAQ Calibration Algorithm: Outputs proprietary corrected PM values (pm25_env, pm10_env). In this study, we utilize the raw sensor reading (pm25) as our primary feature to build independent, localized calibration models.
+3.1.3 Reference Monitor: Teledyne API T640
+The ground truth reference data was collected using a co-located Teledyne API T640 particulate monitor. The T640 utilizes broad-spectrum LED light-scattering spectroscopy to provide continuous, high-resolution hourly measurements of  mass concentrations. It is a US EPA Federal Equivalent Method (FEM) instrument with an operating range of 0 to 10,000and a measurement resolution of .
+3.2 Data Preprocessing and Alignment
+3.2.1 Temporal Alignment and Reindexing
+The low-cost sensor collects data at a high temporal resolution (typically 1-minute intervals), whereas the Teledyne T640 reference monitor logs hourly averages. To align the datasets:
+The 1-minute Modulair-PM sensor data was aggregated to hourly averages using the mean.
+Both datasets were converted to Coordinated Universal Time (UTC) and aligned by index.
+Due to potential offsets and minor gaps, the sensor data was reindexed to match the reference database index (Timestamp (UTC+0)), ensuring complete temporal alignment.
+3.2.2 Quality Control and Outlier Handling
+To ensure data integrity, data quality filters were applied:
+Negative Values: Reference  measurements below  (due to instrument zero-drift) were flagged and removed.
+Instrument Malfunction Flags: Data points where the Modulair-PM sensor flagged device status errors (flag != 0) were excluded.
+Missing Data: Gaps of  consecutive hours in the low-cost sensor data were filled using linear interpolation. Gaps exceeding 2 hours were dropped from the training and testing sets to prevent introducing artificial signals.
+Outlier Detection: The Interquartile Range (IQR) method was applied to raw particulate measurements. Extreme spikes exceeding  were cross-checked with reference measurements; if the reference monitor did not register a corresponding spike, the sensor data was treated as an instrumental error and removed. Genuine high-pollution events (such as dust storms) where both instruments spiked were preserved.
+3.3 Feature Engineering
+To capture the physical and chemical behavior of optical particle counters, environmental humidity interference, and temporal dynamics, a comprehensive 75-feature vector was engineered.
+3.3.1 Aerosol Hygroscopicity and Kohler Growth Physics
+Optical particle counters overestimate particulate mass at high relative humidity () due to water uptake (hygroscopic swelling). To explicitly model this non-linear growth without forcing tree algorithms to memorize noise:
+Multi-Gamma Kohler Growth Curves: Eight distinct empirical growth curves were derived across exponents:
+Droplet Swelling Ratio & Scaled Growth:
+Exponential Deliquescence Surge: Captures extreme condensation when relative humidity exceeds :
+3.3.2 Thermodynamics (Vapor Pressure Deficit, Absolute Humidity, and Dew Point)
+To capture atmospheric water mass density and evaporation pressure:
+Saturation Vapor Pressure ): Computed using Tetens formula
+ (
+Vapor Pressure Deficit (VPD): Quantifies atmospheric drying capacity:
+Absolute Humidity (AH): Exact water mass density in ambient air):
+Dew Point Temperature (): Computed via Magnus equation:
+3.3.3 Multi-Window EWMA and Rolling Trend Features
+To model local atmospheric continuity and rapid air quality spikes (e.g. traffic or biomass plumes):
+Exponentially Weighted Moving Averages (EWMA): Calculated across 9 time spans ( hours:
+Rolling Means, Standard Deviations, and Differences: Computed across the same 9 windows () to capture short-term background levels and volatility ).
+3.3.4 Cyclical Temporal Harmonic Encodings
+To avoid artificial boundary discontinuities at midnight (23 \to 0) or year-end (12 \to 1), temporal dimensions were mapped onto continuous 2D circular harmonics:
+Diurnal Cycles: 
+Weekly Cycles: 
+Annual Seasonal Cycles: 
+3.3.5 Harmattan and Dust Storm Indicators
+To handle regional mineral dust transport during the dry season (November to March), localized dust storm indicators (is_harmattan_month, harmattan_score, is_harmattan) were computed based on coarse-particle ratios and low relative humidity.
+3.4 Model Architectures and Training
+Four modeling paradigms were implemented and evaluated:
+3.4.1 Baseline Model: Linear Regression
+A standard Multiple Linear Regression (MLR) model was implemented as a baseline:
+3.4.2 Ensemble Model: Random Forest Regressor
+A Random Forest Regressor constructing an ensemble of decision trees using bagging and random feature selection:
+Structure: Trained with 200 decision trees (n_estimators=200).
+Hyperparameter Optimization: Conducted using Grid Search (GridSearchCV).
+3.4.3 Deep Learning Model: Multi-Layer Perceptron (MLP) Regressor
+A feedforward artificial neural network trained using Scikit-Learn's MLPRegressor:
+Architecture: Single hidden layer with 128 neurons (hidden_layer_sizes=(128,)), hyperbolic tangent activation (), Adam solver, and L2 regularization ().
+3.4.4 Primary Architecture: Stacked Physics-Informed Meta-Ensemble (SPIME v4)
+To maximize accuracy while completely eliminating generalization overfitting, a two-level stacked meta-ensemble was developed (train_stacked_physics_ensemble.py):
+Level 0 Base Estimators:
+Regularized Random Forest: 600 decision trees (max_depth=32, min_samples_split=2, max_features=0.55).
+Regularized ExtraTrees: 600 extremely randomized trees (max_depth=34, min_samples_split=2, max_features=0.55).
+LightGBM Regressor: 1,500 leaf-wise gradient boosted trees (learning_rate=0.015, max_depth=18, num_leaves=380, reg_alpha=0.005, reg_lambda=0.05).
+HistGradientBoosting Regressor: 1,200 histogram binned gradient iterations (learning_rate=0.015, max_depth=24, min_samples_leaf=2).
+Level 1 Out-of-Fold (OOF) Stacking Matrix:
+To prevent meta-learner data leakage, a 5-Fold Cross-Validation strategy was applied to generate out-of-fold prediction matrix . Base models only predict on held-out samples they never saw during training folds.
+Level 2 Meta-Learner:
+An L_2-regularized RidgeCV model combines out-of-fold predictions from the four base estimators to generate the final reference-grade .
+3.5 Model Validation and Testing Strategy
+To evaluate how well the models generalize to unseen future data and prevent temporal data leakage:
+Chronological Train-Test Split: The co-located dataset was split chronologically rather than randomly. A training partition (75% or 80%) consisting of earlier records (primarily 2024 data) was used to train the models, while a holdout test partition (20% to 25%) consisting of subsequent records (2025 data) was used to evaluate generalization.
+Time-Series Cross-Validation: A 5-fold Time Series Split (`TimeSeriesSplit`) was applied during hyperparameter optimization, where the training set in each fold grows sequentially, and the validation set is always chronologically subsequent to the training set. This simulates a real-world deployment scenario where models calibrated on past data must predict future air quality.
+3.6 Evaluation Framework
+Model performance is assessed quantitatively using three primary metrics:
+Coefficient of Determination (R^2 Score): Measures the proportion of variance in the reference data explained by the calibration model:
+Mean Absolute Error (MAE): Measures the average magnitude of absolute errors (expressed in :
+Root Mean Squared Error (RMSE): Penalizes larger deviations, making it sensitive to extreme prediction errors:
+In these equations,  is the actual reference  value from the Teledyne T640,  is the calibrated value predicted by the model,  is the mean of the actual reference values, and n is the total number of test samples.
+In addition to quantitative metrics, Residual Diagnostics were conducted:
+Residual Distribution Plotting: Histograms and Kernel Density Estimation (KDE) to verify if prediction errors are normally distributed.
+Quantile-Quantile (Q-Q) Plots: Standardized residuals plotted against theoretical normal quantiles to assess deviations from normality.
+Heteroscedasticity Analysis: Scatter plots of residuals versus predicted values to determine if the error variance is constant across the range of predictions.
+Feature Importance Analysis: Extraction of tree-based feature importances from the Random Forest model to identify the physical parameters most critical to correcting sensor readings.
+

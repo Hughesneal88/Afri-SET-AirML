@@ -1,0 +1,146 @@
+
+--- Chat API Exception ---
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\blueprints\chat.py", line 136, in api_chat_message
+    rag_response = rag_engine.answer_user_question(
+        query=query,
+    ...<2 lines>...
+        chat_history=existing_messages
+    )
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 436, in answer_user_question
+    airsense_answer = self._generate_airsense_rag_answer(query, live_data_dict, active_model_name, hist, retrieved_docs)
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 608, in _generate_airsense_rag_answer
+    f"• **Optical Engine**: **Alphasense OPC-N3** measuring 24 discrete particle size bins ($0.35\\,\\mu\\text{m}$ to $40\\,\\mu\\text{m}$) via laser light scattering at 658 nm.\n"
+                                                                                                               ^
+NameError: name 'm' is not defined
+
+
+--- Chat API Exception ---
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 502, in _call_groq_free_llm
+    with urllib.request.urlopen(req, timeout=5) as response:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 493, in open
+    response = meth(req, response)
+  File "C:\Python314\Lib\urllib\request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "C:\Python314\Lib\urllib\request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 464, in _call_chain
+    result = func(*args)
+  File "C:\Python314\Lib\urllib\request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\blueprints\chat.py", line 136, in api_chat_message
+    rag_response = rag_engine.answer_user_question(
+        query=query,
+    ...<2 lines>...
+        chat_history=existing_messages
+    )
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 377, in answer_user_question
+    groq_response, model_used, err_msg = self._call_groq_free_llm(
+                                         ~~~~~~~~~~~~~~~~~~~~~~~~^
+        groq_key, query, live_str, hist_str, context_str, afriset_context, web_context, chat_history
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 509, in _call_groq_free_llm
+    print(f"Groq API error for model {model_name}: {http_err.code} - {err_body}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 22] Invalid argument
+
+
+--- Chat API Exception ---
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 502, in _call_groq_free_llm
+    with urllib.request.urlopen(req, timeout=5) as response:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 493, in open
+    response = meth(req, response)
+  File "C:\Python314\Lib\urllib\request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "C:\Python314\Lib\urllib\request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 464, in _call_chain
+    result = func(*args)
+  File "C:\Python314\Lib\urllib\request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\blueprints\chat.py", line 136, in api_chat_message
+    rag_response = rag_engine.answer_user_question(
+        query=query,
+    ...<2 lines>...
+        chat_history=existing_messages
+    )
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 377, in answer_user_question
+    groq_response, model_used, err_msg = self._call_groq_free_llm(
+                                         ~~~~~~~~~~~~~~~~~~~~~~~~^
+        groq_key, query, live_str, hist_str, context_str, afriset_context, web_context, chat_history
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 509, in _call_groq_free_llm
+    if http_err.code == 429:
+OSError: [Errno 22] Invalid argument
+
+
+--- Chat API Exception ---
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 502, in _call_groq_free_llm
+    with urllib.request.urlopen(req, timeout=5) as response:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 493, in open
+    response = meth(req, response)
+  File "C:\Python314\Lib\urllib\request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "C:\Python314\Lib\urllib\request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 464, in _call_chain
+    result = func(*args)
+  File "C:\Python314\Lib\urllib\request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\blueprints\chat.py", line 136, in api_chat_message
+    rag_response = rag_engine.answer_user_question(
+        query=query,
+    ...<2 lines>...
+        chat_history=existing_messages
+    )
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 377, in answer_user_question
+    groq_response, model_used, err_msg = self._call_groq_free_llm(
+                                         ~~~~~~~~~~~~~~~~~~~~~~~~^
+        groq_key, query, live_str, hist_str, context_str, afriset_context, web_context, chat_history
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Hughe\Documents\SCHOOL\Final Year Project\Modulair-PM\web_app\rag_engine.py", line 509, in _call_groq_free_llm
+    if http_err.code == 429:
+OSError: [Errno 22] Invalid argument
+

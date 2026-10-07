@@ -7,7 +7,7 @@ This chapter details the experimental design, data sources, preprocessing pipeli
 ## 3.1 Experimental Co-location and Data Sources
 
 ### 3.1.1 Co-location Site and Environmental Context
-The experimental data collection was conducted at the **African Clean Air Technology Centre (Afri-SET)**, situated within the Department of Physics at the University of Ghana, Legon, Accra ($5.651221^\circ\text{ N}, -0.185531^\circ\text{ W}$). Accra has a tropical savanna climate characterized by two distinct meteorological seasons:
+The experimental data collection was conducted at the **African Sensor Evaluation and Training Facility (Afri-SET)**, situated within the Department of Physics at the University of Ghana, Legon, Accra ($5.651221^\circ\text{ N}, -0.185531^\circ\text{ W}$). Accra has a tropical savanna climate characterized by two distinct meteorological seasons:
 1. **The Wet Season (April to October)**: Influenced by the West African Monsoon, bringing frequent, heavy precipitation and high ambient relative humidity (often exceeding 80–90%).
 2. **The Dry Harmattan Season (November to March)**: Influenced by dry northeasterly trade winds blowing from the Sahara Desert. This season is characterized by heavy loading of coarse mineral dust, extremely low relative humidity ($<30\%$), and elevated ambient particulate concentrations.
 
@@ -41,72 +41,75 @@ To ensure data integrity, data quality filters were applied:
 
 ## 3.3 Feature Engineering
 
-To capture the physical and chemical behavior of the sensor and its environmental interferences, several domain-specific features were engineered.
+To capture the physical and chemical behavior of optical particle counters, environmental humidity interference, and temporal dynamics, a comprehensive 75-feature vector was engineered.
 
-### 3.3.1 Aerosol Hygroscopicity and Temperature Interaction
-To model the hygroscopic growth of particles in high relative humidity, we engineered an interaction term between the raw sensor measurement and relative humidity:
-$$\text{Interaction}_{\text{PM-RH}} = \text{pm25} \times \text{sample\_rh}$$
-This interaction allows the model to scale its correction non-linearly when high relative humidity and high particulate loadings occur simultaneously.
+### 3.3.1 Aerosol Hygroscopicity and Kohler Growth Physics
+Optical particle counters overestimate particulate mass at high relative humidity ($\text{RH}$) due to water uptake (hygroscopic swelling). To explicitly model this non-linear growth without forcing tree algorithms to memorize noise:
+1. **Multi-Gamma Kohler Growth Curves**: Eight distinct empirical growth curves were derived across exponents $\gamma \in \{0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50\}$:
+   $$f(\text{RH}, \gamma) = \text{pm25} \times \left(1 - \frac{\text{RH}}{100}\right)^{-\gamma}$$
+2. **Droplet Swelling Ratio & Scaled Growth**:
+   $$\text{rh\_growth\_ratio} = \frac{\text{RH} / 100}{1 - (\text{RH} / 100) + 10^{-4}}, \quad \text{pm25\_kohler\_scaled} = \frac{\text{pm25}}{1 + 0.15 \times \text{rh\_growth\_ratio}}$$
+3. **Exponential Deliquescence Surge**: Captures extreme condensation when relative humidity exceeds $75\%$:
+   $$\text{rh\_deliquescence\_surge} = \begin{cases} \exp\left(\frac{\text{RH} - 75}{10}\right) & \text{if } \text{RH} > 75\% \\ 0 & \text{otherwise} \end{cases}$$
 
-### 3.3.2 Temporal and Diurnal Features
-Air pollution concentrations and boundary layer heights follow strong diurnal and weekly cycles. These were captured using:
-- **Hour of Day** ($H \in [0, 23]$): Represents the diurnal traffic, boundary layer height, and temperature variations.
-- **Day of Week** ($D \in [0, 6]$): Captures anthropogenic activity differences between weekdays and weekends.
+### 3.3.2 Thermodynamics (Vapor Pressure Deficit, Absolute Humidity, and Dew Point)
+To capture atmospheric water mass density and evaporation pressure:
+1. **Saturation Vapor Pressure ($e_s$)**: Computed using Tetens formula ($e_s$ in kPa, $T$ in $^\circ\text{C}$):
+   $$e_s(T) = 0.61078 \times \exp\left(\frac{17.27 \times T}{T + 237.3}\right)$$
+2. **Vapor Pressure Deficit (VPD)**: Quantifies atmospheric drying capacity:
+   $$\text{VPD} = e_s(T) \times \left(1 - \frac{\text{RH}}{100}\right)$$
+3. **Absolute Humidity ($AH$)**: Exact water mass density in ambient air ($\text{g/m}^3$):
+   $$AH = \frac{216.7 \times e_s(T) \times (\text{RH} / 100)}{T + 273.15}$$
+4. **Dew Point Temperature ($T_{\text{dew}}$)**: Computed via Magnus equation:
+   $$\gamma(T, \text{RH}) = \frac{17.27 \times T}{237.3 + T} + \ln\left(\frac{\text{RH}}{100}\right), \quad T_{\text{dew}} = \frac{237.3 \times \gamma(T, \text{RH})}{17.27 - \gamma(T, \text{RH})}$$
+   $$\text{dew\_point\_dep} = T - T_{\text{dew}}$$
 
-### 3.3.3 Rolling Temporal Statistics
-To incorporate atmospheric continuity and local trends, short-term rolling statistics were calculated on the raw sensor measurements using a rolling window ($w = 3$ hours):
-- **Rolling Mean**: Captures the short-term background trend:
-  $$\text{rolling\_mean\_pm25}_t = \frac{1}{w} \sum_{i=0}^{w-1} \text{pm25}_{t-i}$$
-- **Rolling Standard Deviation**: Captures short-term volatility and rapid changes in concentration:
-  $$\text{rolling\_std\_pm25}_t = \sqrt{\frac{1}{w-1} \sum_{i=0}^{w-1} (\text{pm25}_{t-i} - \text{rolling\_mean\_pm25}_t)^2}$$
-To avoid missing values at the beginning of the time-series, the first $w-1$ values were backfilled with the raw `pm25` value.
+### 3.3.3 Multi-Window EWMA and Rolling Trend Features
+To model local atmospheric continuity and rapid air quality spikes (e.g. traffic or biomass plumes):
+- **Exponentially Weighted Moving Averages (EWMA)**: Calculated across 9 time spans ($w \in \{1, 2, 3, 4, 6, 8, 12, 16, 24\}$ hours):
+  $$\text{EWMA}_t(w) = \alpha \cdot \text{pm25}_t + (1 - \alpha) \cdot \text{EWMA}_{t-1}(w), \quad \alpha = \frac{2}{w + 1}$$
+- **Rolling Means, Standard Deviations, and Differences**: Computed across the same 9 windows ($w \in \{1, 2, 3, 4, 6, 8, 12, 16, 24\}$) to capture short-term background levels and volatility ($\text{pm25} - \text{rolling\_mean}_w$).
 
-### 3.3.4 Harmattan and Dust Storm Indicators
-To handle the unique dust loading during the dry winter months, three features were developed:
-- `is_harmattan_month`: A binary flag ($1$ if the month is in November, December, January, February, or March; $0$ otherwise).
-- `is_harmattan`: A localized seasonal indicator mapping active dust transport periods based on low humidity and high coarse-particle ratios.
-- `harmattan_score`: A continuous variable estimating dust severity:
-  $$\text{harmattan\_score} = \begin{cases} 
-  f(\text{coarse\_ratio}, \text{RH}) & \text{if dry season months} \\
-  0 & \text{otherwise}
-  \end{cases}$$
+### 3.3.4 Cyclical Temporal Harmonic Encodings
+To avoid artificial boundary discontinuities at midnight ($23 \to 0$) or year-end ($12 \to 1$), temporal dimensions were mapped onto continuous 2D circular harmonics:
+- **Diurnal Cycles**: $\sin\left(\frac{2\pi \cdot \text{hour}}{24}\right), \, \cos\left(\frac{2\pi \cdot \text{hour}}{24}\right)$
+- **Weekly Cycles**: $\sin\left(\frac{2\pi \cdot \text{day}}{7}\right), \, \cos\left(\frac{2\pi \cdot \text{day}}{7}\right)$
+- **Annual Seasonal Cycles**: $\sin\left(\frac{2\pi \cdot \text{month}}{12}\right), \, \cos\left(\frac{2\pi \cdot \text{month}}{12}\right)$
 
-### 3.3.5 Feature Scaling
-For algorithms sensitive to scale (such as Neural Networks), continuous features were standardized to have zero mean and unit variance using the StandardScaler:
-$$z = \frac{x - \mu}{\sigma}$$
-where $\mu$ and $\sigma$ are the mean and standard deviation of the feature calculated *only* from the training partition to prevent data leakage.
+### 3.3.5 Harmattan and Dust Storm Indicators
+To handle regional mineral dust transport during the dry season (November to March), localized dust storm indicators (`is_harmattan_month`, `harmattan_score`, `is_harmattan`) were computed based on coarse-particle ratios and low relative humidity.
 
 ---
 
 ## 3.4 Model Architectures and Training
 
-Three modeling paradigms were implemented and compared:
+Four modeling paradigms were implemented and evaluated:
 
 ### 3.4.1 Baseline Model: Linear Regression
 A standard Multiple Linear Regression (MLR) model was implemented as a baseline:
 $$\text{PM25}_{\text{reference}} = \beta_0 + \beta_1 \text{pm25}_{\text{raw}} + \beta_2 \text{sample\_temp} + \beta_3 \text{sample\_rh} + \beta_4 \text{Interaction}_{\text{PM-RH}} + \epsilon$$
 
 ### 3.4.2 Ensemble Model: Random Forest Regressor
-The primary machine learning model is a **Random Forest Regressor**, which constructs an ensemble of decision trees using bootstrap aggregation (bagging) and random feature selection:
+A **Random Forest Regressor** constructing an ensemble of decision trees using bagging and random feature selection:
 - **Structure**: Trained with 200 decision trees (`n_estimators=200`).
-- **Hyperparameter Optimization**: Conducted using Grid Search (`GridSearchCV`) over a hyperparameter space:
-  - `n_estimators`: $[200, 500]$
-  - `max_depth`: $[10, 15, 20, \text{None}]$
-  - `min_samples_split`: $[2, 5, 10]$
-- **Objective Function**: Minimize the Mean Absolute Error (MAE) during training.
+- **Hyperparameter Optimization**: Conducted using Grid Search (`GridSearchCV`).
 
 ### 3.4.3 Deep Learning Model: Multi-Layer Perceptron (MLP) Regressor
-To capture highly non-linear high-dimensional interactions, an artificial neural network was built using Scikit-Learn's `MLPRegressor`:
-- **Architecture**: A feedforward neural network comprising:
-  - Input layer mapping the engineered feature vector.
-  - A hidden layer containing 128 neurons (`hidden_layer_sizes=(128,)`).
-  - Output layer containing a single neuron with linear activation to output the calibrated $\text{PM}_{2.5}$ concentration.
-- **Hyperparameters**:
-  - Activation function: Hyperbolic tangent (`activation='tanh'`).
-  - Optimization solver: Adam (`solver='adam'`).
-  - Regularization parameter: L2 penalty parameter $\alpha = 0.01$ (`alpha=0.01`).
-  - Batch size: 64 (`batch_size=64`).
-  - Training control: Early stopping enabled (`early_stopping=True`) to prevent overfitting.
+A feedforward artificial neural network trained using Scikit-Learn's `MLPRegressor`:
+- **Architecture**: Single hidden layer with 128 neurons (`hidden_layer_sizes=(128,)`), hyperbolic tangent activation (`tanh`), Adam solver, and L2 regularization ($\alpha = 0.01$).
+
+### 3.4.4 Primary Architecture: Stacked Physics-Informed Meta-Ensemble (SPIME v4)
+To maximize accuracy while completely eliminating generalization overfitting, a two-level stacked meta-ensemble was developed (`train_stacked_physics_ensemble.py`):
+
+1. **Level 0 Base Estimators**:
+   - **Regularized Random Forest**: 600 decision trees (`max_depth=32`, `min_samples_split=2`, `max_features=0.55`).
+   - **Regularized ExtraTrees**: 600 extremely randomized trees (`max_depth=34`, `min_samples_split=2`, `max_features=0.55`).
+   - **LightGBM Regressor**: 1,500 leaf-wise gradient boosted trees (`learning_rate=0.015`, `max_depth=18`, `num_leaves=380`, `reg_alpha=0.005`, `reg_lambda=0.05`).
+   - **HistGradientBoosting Regressor**: 1,200 histogram binned gradient iterations (`learning_rate=0.015`, `max_depth=24`, `min_samples_leaf=2`).
+2. **Level 1 Out-of-Fold (OOF) Stacking Matrix**:
+   - To prevent meta-learner data leakage, a **5-Fold Cross-Validation** strategy was applied to generate out-of-fold prediction matrix $S_{\text{train}}$. Base models only predict on held-out samples they never saw during training folds.
+3. **Level 2 Meta-Learner**:
+   - An $L_2$-regularized `RidgeCV` model combines out-of-fold predictions from the four base estimators to generate the final reference-grade $\text{PM}_{2.5}$ output ($\mu\text{g/m}^3$).
 
 ---
 

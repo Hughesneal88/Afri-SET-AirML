@@ -25,6 +25,13 @@ loaded_models_cache = {}
 
 # Custom model wrappers for pickle loading
 try:
+    from train_stacked_physics_ensemble import StackedPhysicsMetaEnsemble
+    import sys
+    sys.modules['__main__'].StackedPhysicsMetaEnsemble = StackedPhysicsMetaEnsemble
+except Exception as e:
+    print(f"SPIME import note: {e}")
+
+try:
     from train_moe_expert import AtmosphericMoE
 except Exception:
     pass
@@ -88,15 +95,16 @@ def get_model_from_file(file_path):
 
 def load_dataset_split(partition='holdout'):
     path_map = {
-        'holdout': os.path.join(BASE_DIR, 'web_data', 'holdout_data.csv'),
-        'validation': os.path.join(BASE_DIR, 'web_data', 'val_data.csv'),
-        'test': os.path.join(BASE_DIR, 'web_data', 'test_data.csv'),
-        'full': os.path.join(BASE_DIR, 'web_data', 'full_dataset.csv')
+        'holdout': os.path.join(PROJECT_DIR, 'web_data', 'out_of_sample_test.csv'),
+        'validation': os.path.join(PROJECT_DIR, 'web_data', 'test_data.csv'),
+        'test': os.path.join(PROJECT_DIR, 'web_data', 'test_data.csv'),
+        'train': os.path.join(PROJECT_DIR, 'web_data', 'train_data.csv'),
+        'full': os.path.join(PROJECT_DIR, 'web_data', 'full_dataset.csv')
     }
     
     target_path = path_map.get(partition, path_map['holdout'])
     if not os.path.exists(target_path):
-        target_path = os.path.join(PROJECT_DIR, 'web_data', 'full_dataset.csv')
+        target_path = os.path.join(PROJECT_DIR, 'web_data', 'out_of_sample_test.csv')
         
     if os.path.exists(target_path):
         df = pd.read_csv(target_path)
@@ -118,12 +126,20 @@ def run_model_inference(model_key, df, registry):
     if model is None:
         return df['pm25'].values
 
-    n_features = getattr(model, 'n_features_in_', model_info.get("features", 11))
-    cols = Config.FEATURE_SETS.get(n_features, Config.FEATURE_SETS[11])
-
     try:
-        X = df[cols].copy()
-        return model.predict(X)
+        if hasattr(model, 'feature_names'):
+            return model.predict(df)
+        
+        n_features = getattr(model, 'n_features_in_', model_info.get("features", 11))
+        cols = Config.FEATURE_SETS.get(n_features, Config.FEATURE_SETS[11])
+        
+        # Fill any missing columns in dataset with 0.0 for safety
+        X = df.copy()
+        for col in cols:
+            if col not in X.columns:
+                X[col] = 0.0
+        X_sub = X[cols]
+        return model.predict(X_sub)
     except Exception as e:
         print(f"Inference error for model {model_key}: {e}")
         return df['pm25'].values
@@ -140,13 +156,25 @@ def get_models():
         })
     return jsonify({"status": "success", "models": models_list})
 
-@models_bp.route('/predict', methods=['POST'])
+@models_bp.route('/predict', methods=['GET', 'POST'])
 def predict_batch():
     try:
-        payload = request.get_json() or {}
-        model_key = payload.get('model_key', 'random_forest_pm25_model_update2')
-        partition = payload.get('partition', 'holdout')
+        if request.method == 'POST':
+            payload = request.get_json() or {}
+        else:
+            payload = request.args.to_dict()
+        model_key = payload.get('model_key', 'stacked_physics_meta_ensemble')
+        raw_partition = (payload.get('partition') or payload.get('split') or 'holdout').lower()
+        if raw_partition in ['val', 'validation']:
+            partition = 'validation'
+        elif raw_partition in ['test', 'holdout']:
+            partition = 'holdout'
+        elif raw_partition in ['all', 'full']:
+            partition = 'full'
+        else:
+            partition = raw_partition
         compare_key = payload.get('compare_key', 'none')
+        max_points = int(payload.get('max_points', 500))
 
         df = load_dataset_split(partition)
         if df.empty:
@@ -163,12 +191,33 @@ def predict_batch():
 
         compare_predictions = []
         compare_name = ""
-        if compare_key != 'none' and compare_key in registry:
-            compare_predictions = run_model_inference(compare_key, df, registry).tolist()
-            compare_name = registry[compare_key]["name"]
+        if compare_key != 'none':
+            if compare_key == 'quantaq_factory':
+                compare_predictions = run_model_inference('quantaq_factory', df, registry).tolist()
+                compare_name = "QuantAQ Factory Uncalibrated Output"
+            elif compare_key in registry:
+                compare_predictions = run_model_inference(compare_key, df, registry).tolist()
+                compare_name = registry[compare_key]["name"]
 
         timestamps = df['timestamp'].dt.strftime('%Y-%m-%d %H:%M').tolist() if 'timestamp' in df.columns else list(range(len(df)))
         raw_pm25 = df['pm25'].tolist()
+        actuals_list = actuals.tolist()
+        preds_list = predictions.tolist()
+
+        # Efficient downsampling for high-FPS chart rendering if dataset is large
+        if max_points > 0 and len(df) > max_points:
+            step = max(1, len(df) // max_points)
+            timestamps_chart = timestamps[::step]
+            actuals_chart = actuals_list[::step]
+            preds_chart = preds_list[::step]
+            raw_chart = raw_pm25[::step]
+            compare_chart = compare_predictions[::step] if compare_predictions else []
+        else:
+            timestamps_chart = timestamps
+            actuals_chart = actuals_list
+            preds_chart = preds_list
+            raw_chart = raw_pm25
+            compare_chart = compare_predictions
 
         return jsonify({
             "status": "success",
@@ -176,11 +225,11 @@ def predict_batch():
             "model_name": registry.get(model_key, {}).get("name", model_key),
             "compare_name": compare_name,
             "partition": partition,
-            "timestamps": timestamps,
-            "actuals": actuals.tolist(),
-            "predictions": predictions.tolist(),
-            "raw_pm25": raw_pm25,
-            "compare_predictions": compare_predictions,
+            "timestamps": timestamps_chart,
+            "actuals": actuals_chart,
+            "predictions": preds_chart,
+            "raw_pm25": raw_chart,
+            "compare_predictions": compare_chart,
             "metrics": {
                 "r2": r2,
                 "mae": mae,
@@ -193,17 +242,52 @@ def predict_batch():
         print(f"Predict batch error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+SYSTEM_SETTINGS = {
+    "primary_model_key": "stacked_physics_meta_ensemble",
+    "default_partition": "holdout",
+    "max_points": 500,
+    "refresh_interval": 15
+}
+
+@models_bp.route('/settings', methods=['GET', 'POST'])
+def system_settings():
+    global SYSTEM_SETTINGS
+    if request.method == 'POST':
+        payload = request.get_json() or {}
+        if 'primary_model_key' in payload:
+            SYSTEM_SETTINGS['primary_model_key'] = payload['primary_model_key']
+        if 'default_partition' in payload:
+            SYSTEM_SETTINGS['default_partition'] = payload['default_partition']
+        if 'max_points' in payload:
+            SYSTEM_SETTINGS['max_points'] = int(payload['max_points'])
+        if 'refresh_interval' in payload:
+            SYSTEM_SETTINGS['refresh_interval'] = int(payload['refresh_interval'])
+        return jsonify({"status": "success", "message": "System settings saved successfully", "settings": SYSTEM_SETTINGS})
+    
+    return jsonify({"status": "success", "settings": SYSTEM_SETTINGS})
+
+@models_bp.route('/live_telemetry', methods=['GET'])
+def get_live_telemetry():
+    try:
+        from web_app.blueprints.views import quantaq_client
+        model_key = request.args.get('model_key', SYSTEM_SETTINGS['primary_model_key'])
+        telemetry = quantaq_client.calibrate_live_telemetry(model_key=model_key)
+        return jsonify({"status": "success", "telemetry": telemetry})
+    except Exception as e:
+        print(f"Live telemetry endpoint error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @models_bp.route('/predict_single', methods=['POST'])
 def predict_single():
     try:
         payload = request.get_json() or {}
-        model_key = payload.get('model_key', 'random_forest_pm25_model_update2')
+        model_key = payload.get('model_key', SYSTEM_SETTINGS['primary_model_key'])
         
-        pm25 = float(payload.get('pm25', 45.0))
-        sample_temp = float(payload.get('sample_temp', 31.5))
-        sample_rh = float(payload.get('sample_rh', 78.0))
-        hour_of_day = int(payload.get('hour_of_day', 14))
-        is_harmattan = int(payload.get('is_harmattan', 0))
+        pm25 = float(payload.get('pm25') or payload.get('raw_pm25') or 45.0)
+        sample_temp = float(payload.get('sample_temp') or payload.get('temp') or 31.5)
+        sample_rh = float(payload.get('sample_rh') or payload.get('rh') or 78.0)
+        hour_of_day = int(payload.get('hour_of_day') if 'hour_of_day' in payload else (payload.get('hour') or 14))
+        is_harmattan = int(payload.get('is_harmattan') if 'is_harmattan' in payload else (payload.get('harmattan_season') or 0))
 
         registry = discover_joblib_models()
         model_info = registry.get(model_key)

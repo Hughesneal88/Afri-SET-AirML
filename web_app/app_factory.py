@@ -16,6 +16,8 @@ from web_app.blueprints.auth import auth_bp
 from web_app.blueprints.models import models_bp
 from web_app.blueprints.chat import chat_bp
 from web_app.blueprints.telemetry import telemetry_bp
+from web_app.blueprints.data_ingest import data_ingest_bp
+from web_app.blueprints.forecast import forecast_bp
 
 def create_app(config_class=Config):
     """
@@ -35,6 +37,8 @@ def create_app(config_class=Config):
     app.register_blueprint(models_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(telemetry_bp)
+    app.register_blueprint(data_ingest_bp)
+    app.register_blueprint(forecast_bp)
 
     # Global Resilience Error Handlers (Zero SPOF)
     @app.errorhandler(404)
@@ -43,7 +47,13 @@ def create_app(config_class=Config):
 
     @app.errorhandler(500)
     def internal_error(error):
-        print(f"Global 500 internal server error: {error}")
+        import traceback
+        tb = traceback.format_exc()
+        try:
+            with open(os.path.join(PROJECT_DIR, "flask_errors.log"), "a", encoding="utf-8") as f:
+                f.write(f"\n--- Global 500 Exception ---\n{tb}\n")
+        except Exception:
+            pass
         return jsonify({"status": "error", "message": "An internal error occurred, but the system recovered safely."}), 500
 
     return app

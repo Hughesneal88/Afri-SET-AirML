@@ -37,7 +37,10 @@ cols11 = [
 
 cols14 = cols11 + ['vapor_pressure_deficit', 'dew_point_depression', 'rh_deliquescence_surge']
 
+from train_stacked_physics_ensemble import StackedPhysicsMetaEnsemble, add_v4_physics_features
+
 models = {
+    'Stacked Physics-Informed Meta-Ensemble (SPIME)': 'models/stacked_physics_meta_ensemble.joblib',
     'Random Forest Regressor (v2 Best Model)': 'random_forest_pm25_model_update2.joblib',
     'Atmospheric Mixture of Experts (MoE)': 'models/moe_expert_model.joblib',
     'Deep Neural LLM Regressor': 'models/llm_calibration_model.joblib',
@@ -49,8 +52,11 @@ for name, path in models.items():
     file_path = os.path.join(project_dir, path)
     if os.path.exists(file_path):
         m = joblib.load(file_path)
-        feature_cols = cols14 if "moe" in path else cols11
-        preds = m.predict(df[feature_cols])
+        if isinstance(m, StackedPhysicsMetaEnsemble) or "stacked_physics" in path:
+            preds = m.predict(df)
+        else:
+            feature_cols = cols14 if "moe" in path else cols11
+            preds = m.predict(df[feature_cols])
         
         r2 = r2_score(actuals, preds)
         mae = mean_absolute_error(actuals, preds)

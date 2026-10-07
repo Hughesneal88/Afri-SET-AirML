@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "telemetry": {
+    "calibrated_pm25": 17.38,
+    "delta": -1.13,
+    "device_sn": "MOD-PM-01068",
+    "humidity": 63.3,
+    "model_name": "\ud83c\udfc6 SPIME v4 Ensemble",
+    "pct_delta": -6.1,
+    "raw_pm25": 18.51,
+    "source": "QuantAQ Modulair-PM Telemetry Stream",
+    "status": "success",
+    "temperature": 32.2,
+    "timestamp": "2026-10-03 01:44:36",
+    "us_epa_aqi": {
+      "category": "Moderate",
+      "color": "#fbbf24",
+      "score": 62
+    }
+  }
+}

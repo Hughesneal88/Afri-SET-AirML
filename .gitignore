@@ -1,2 +1,5 @@
 *.joblib
 openaq_data/
+
+# Local Netlify folder
+.netlify
