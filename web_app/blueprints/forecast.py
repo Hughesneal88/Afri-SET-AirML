@@ -59,11 +59,10 @@ def get_forecaster():
 
 def load_recent_observed_hours(now_h=None, lookback_hours=48, limit=None):
     """
-    Every stored telemetry recording, oldest first.
+    Hourly means of every stored reading, oldest hour first.
 
-    Readings are not averaged into hours and not cut to a 24- or 48-hour
-    window. lookback_hours and limit are accepted so older callers keep
-    working, and they do not drop recordings.
+    Nothing is dropped for being outside a 48-hour window. lookback_hours and
+    limit are accepted so older callers keep working.
     """
     del now_h, lookback_hours, limit
     try:
@@ -72,7 +71,7 @@ def load_recent_observed_hours(now_h=None, lookback_hours=48, limit=None):
     except Exception:
         return []
 
-    observed = []
+    buckets = {}
     for rec in records:
         ts = pd.to_datetime(rec.get("timestamp"), errors="coerce")
         if pd.isna(ts):
@@ -83,18 +82,29 @@ def load_recent_observed_hours(now_h=None, lookback_hours=48, limit=None):
             rh = float(rec.get("humidity"))
         except (TypeError, ValueError):
             continue
+        hour = pd.Timestamp(ts).floor("h")
+        slot = buckets.setdefault(hour, {"raw": [], "temp": [], "rh": []})
+        slot["raw"].append(raw_pm)
+        slot["temp"].append(temp)
+        slot["rh"].append(rh)
+
+    observed = []
+    for hour in sorted(buckets):
+        slot = buckets[hour]
+        if not slot["raw"]:
+            continue
         observed.append({
-            "timestamp": pd.Timestamp(ts),
-            "raw_pm25": raw_pm,
-            "temp": temp,
-            "rh": rh
+            "timestamp": hour,
+            "raw_pm25": float(np.mean(slot["raw"])),
+            "temp": float(np.mean(slot["temp"])),
+            "rh": float(np.mean(slot["rh"])),
+            "readings": len(slot["raw"]),
         })
-    observed.sort(key=lambda row: row["timestamp"])
     return observed
 
 
 def _hour_label(ts, show_date):
-    clock = ts.strftime("%H:%M:%S")
+    clock = ts.strftime("%H:00")
     if show_date:
         return f"{int(ts.day)} {ts.strftime('%b')} {clock}"
     return clock
@@ -102,11 +112,10 @@ def _hour_label(ts, show_date):
 
 def build_observed_track_from_logs(logged_hours, telemetry):
     """
-    Turns each stored recording into a history-shelf point.
+    Turns each hourly mean into one history point.
     Logged PM2.5 is kept as stored. The live calibrated ratio is applied only
-    when that live sample is from the same few hours, so an unrelated snapshot
-    cannot rescale the record. A live sample is appended, never used to
-    replace a recording already in the log.
+    when that live sample is from the same few hours. A live sample is added
+    only as its own hour, and it never replaces an hour already in the log.
     """
     live_pm = float(telemetry.get("calibrated_pm25", 12.0) or 12.0)
     live_raw = float(telemetry.get("raw_pm25", live_pm) or live_pm)
@@ -134,6 +143,7 @@ def build_observed_track_from_logs(logged_hours, telemetry):
             "raw_pm25": round(raw_v, 2),
             "temp": round(float(rec["temp"]), 1),
             "rh": round(float(rec["rh"]), 1),
+            "readings": int(rec.get("readings") or 1),
             "aqi_score": aqi_info["aqi_score"],
             "aqi_category": aqi_info["category"],
             "aqi_color": aqi_info["color"]
@@ -142,24 +152,24 @@ def build_observed_track_from_logs(logged_hours, telemetry):
     if not track or pd.isna(live_ts):
         return track
 
-    last_ts = pd.to_datetime(track[-1]["timestamp"])
-    delta_h = (pd.Timestamp(live_ts) - last_ts).total_seconds() / 3600.0
-    if delta_h <= 0 or delta_h > 6:
+    live_hour = pd.Timestamp(live_ts).floor("h")
+    last_hour = pd.to_datetime(track[-1]["timestamp"]).floor("h")
+    if live_hour <= last_hour or (live_hour - last_hour) > pd.Timedelta(hours=6):
         return track
 
     aqi_info = calculate_us_epa_aqi(live_pm)
-    live_point = {
-        "timestamp": pd.Timestamp(live_ts).floor("h").strftime("%Y-%m-%d %H:%M:%S"),
-        "hour_label": _hour_label(pd.Timestamp(live_ts), show_date),
+    track.append({
+        "timestamp": live_hour.strftime("%Y-%m-%d %H:%M:%S"),
+        "hour_label": _hour_label(live_hour, show_date),
         "pm25": round(live_pm, 2),
         "raw_pm25": round(live_raw, 2),
         "temp": round(float(telemetry.get("temperature", track[-1]["temp"])), 1),
         "rh": round(float(telemetry.get("humidity", track[-1]["rh"])), 1),
+        "readings": 1,
         "aqi_score": aqi_info["aqi_score"],
         "aqi_category": aqi_info["category"],
         "aqi_color": aqi_info["color"]
-    }
-    track.append(live_point)
+    })
     return track
 
 
@@ -181,13 +191,13 @@ def _hour_fraction(ts):
 
 def score_recorded_forecasts(observed_track, threshold=FORECAST_HIT_THRESHOLD, max_lead_hours=3):
     """
-    Score each recording against the forecast issued from the previous hour.
+    Score each hour against the forecast issued from the previous hour.
 
-    The forecast is that hour's mean PM2.5, shifted by the Accra diurnal cycle
-    to the reading's timestamp. Readings with no prior hour inside
-    `max_lead_hours` stay in the history but are not scored. MAE is the mean
-    absolute error. MBE is the mean of (forecast − actual): positive means the
-    forecast ran high. A forecast came true within `threshold` µg/m³.
+    The forecast is the previous hour's PM2.5, shifted by the Accra diurnal
+    cycle. Hours with no prior hour inside `max_lead_hours` stay on the chart
+    and are not scored. MAE is the mean absolute error. MBE is the mean of
+    (forecast − actual): positive means the forecast ran high. A forecast came
+    true within `threshold` µg/m³.
     """
     points = []
     if not observed_track:
@@ -231,6 +241,7 @@ def score_recorded_forecasts(observed_track, threshold=FORECAST_HIT_THRESHOLD, m
             "hour_label": str(row.get("hour_label") or stamp.strftime("%H:%M:%S")),
             "issued_at": source.strftime("%Y-%m-%d %H:%M:%S"),
             "issued_label": source.strftime("%H:00"),
+            "readings": int(row.get("readings") or 1),
             "actual_pm25": actual,
             "forecast_pm25": float(forecast_pm),
             "pm25": actual,
@@ -287,13 +298,13 @@ def _verification_kpis(points, threshold):
         "scored_count": scored,
         "hit_rate": round(hit_rate, 1),
         "lead_time_skill": (
-            "Each scored reading is checked against the forecast from the previous hour, "
+            "Each scored hour is checked against the forecast from the previous hour, "
             "shifted by the Accra diurnal cycle. "
             f"It came true when it landed within {threshold:.1f} µg/m³."
         ),
         "status_summary": (
             f"MAE {mae:.2f} µg/m³ · MBE {sign}{mbe:.2f} µg/m³ · "
-            f"{hit_count} of {scored} forecasts came true"
+            f"{hit_count} of {scored} hourly forecasts came true"
         ),
     }
 

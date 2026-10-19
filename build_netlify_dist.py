@@ -112,7 +112,7 @@ def write_forecast_snapshot(data_dir):
         with open(out_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle)
         print(
-            f"    [+] Cached data/forecast.json ({len(history)} recordings, "
+            f"    [+] Cached data/forecast.json ({len(history)} hours, "
             f"{verification_kpis.get('scored_count', 0)} scored, "
             f"MAE {verification_kpis.get('mae')} · MBE {verification_kpis.get('mbe')})"
         )

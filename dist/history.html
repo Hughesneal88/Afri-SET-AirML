@@ -111,8 +111,8 @@
         <header class="top">
             <div>
                 <div class="eyebrow">MOD-PM-01068 · Legon</div>
-                <h1>History and forecast score</h1>
-                <p class="lede">Every stored reading is on this page. A reading is scored when an earlier hour in the past three hours can forecast it. MAE is the average miss. MBE is forecast minus actual, so a positive MBE means the forecast ran high. The home shelf shows only the latest slice.</p>
+                <h1>Hourly history and forecast score</h1>
+                <p class="lede">History and the forward forecast are both hourly. Each history hour is the mean of the readings logged in that hour. An hour is scored when the previous hour, within the past three hours, forecast it. MAE is the average miss. MBE is forecast minus actual, so a positive MBE means the forecast ran high. The home shelf shows only the latest hours.</p>
             </div>
             <a class="back" href="/"><i class="fa-solid fa-arrow-left"></i> Back to studio</a>
         </header>
@@ -120,15 +120,15 @@
         <section class="scores" id="scores" hidden>
             <article class="card"><span>MAE</span><strong id="mae">—</strong><em>Mean absolute error, µg/m³</em></article>
             <article class="card"><span>MBE</span><strong id="mbe">—</strong><em>Mean bias, forecast − actual</em></article>
-            <article class="card"><span>Came true</span><strong id="hits">—</strong><em id="hitNote">Within 2.0 µg/m³ of the later reading</em></article>
-            <article class="card"><span>Still ahead</span><strong id="ahead">—</strong><em>Forecast hours with no later reading yet</em></article>
+            <article class="card"><span>Came true</span><strong id="hits">—</strong><em id="hitNote">Within 2.0 µg/m³ of that hour</em></article>
+            <article class="card"><span>Still ahead</span><strong id="ahead">—</strong><em>Hourly forecasts with no later hour yet</em></article>
         </section>
         <section class="panel">
             <h2>Full series</h2>
             <div id="chart"></div>
         </section>
         <section class="panel">
-            <h2>Each scored forecast</h2>
+            <h2>Each scored hour</h2>
             <div class="filters">
                 <button type="button" class="active" data-filter="all">All scored</button>
                 <button type="button" data-filter="true">Came true</button>
@@ -138,8 +138,9 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Reading</th>
-                            <th>Forecast issued</th>
+                            <th>Hour</th>
+                            <th>Forecast from</th>
+                            <th>Samples</th>
                             <th>Actual</th>
                             <th>Forecast</th>
                             <th>Error</th>
@@ -178,8 +179,8 @@
             const scored = kpis.scored_count || 0;
             document.getElementById("hits").textContent = scored ? `${kpis.hit_rate}%` : "—";
             document.getElementById("hitNote").textContent = scored
-                ? `${hits} of ${scored} forecasts landed within ${kpis.hit_threshold} µg/m³`
-                : "No later reading is available yet";
+                ? `${hits} of ${scored} hours landed within ${kpis.hit_threshold} µg/m³`
+                : "No later hour is available yet";
             document.getElementById("ahead").textContent = String((data.forecast || []).length);
             document.getElementById("status").textContent = kpis.status_summary || "";
         }
@@ -200,7 +201,7 @@
             };
             Plotly.newPlot("chart", [
                 {
-                    name: "Actual",
+                    name: "Actual hour",
                     x: history.map((point) => point.timestamp),
                     y: history.map((point) => point.pm25),
                     type: "scatter",
@@ -208,7 +209,7 @@
                     line: { color: "#e2e8f0", width: 2 }
                 },
                 {
-                    name: "Forecast for that reading",
+                    name: "Forecast for that hour",
                     x: scored.map((point) => point.timestamp),
                     y: scored.map((point) => point.forecast_pm25),
                     type: "scatter",
@@ -239,8 +240,9 @@
                 const row = document.createElement("tr");
                 const error = signed(point.error);
                 row.innerHTML = `
-                    <td>${point.timestamp}</td>
-                    <td>${point.issued_at || "—"}</td>
+                    <td>${point.hour_label || point.timestamp}</td>
+                    <td>${point.issued_label || point.issued_at || "—"}</td>
+                    <td class="num">${point.readings || "—"}</td>
                     <td class="num">${Number(point.actual_pm25).toFixed(2)}</td>
                     <td class="num">${Number(point.forecast_pm25).toFixed(2)}</td>
                     <td class="num">${error}</td>

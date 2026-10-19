@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (shelfTrendText && state.forecastData?.length) {
                 const shown = Math.min(8, state.forecastData.length);
                 const peak = state.forecastData.slice(0, shown).reduce((prev, curr) => (curr.pm25 > prev.pm25) ? curr : prev, state.forecastData[0]);
-                shelfTrendText.textContent = `Next ${shown} of ${state.forecastData.length} forecast hours · peak ${peak.pm25.toFixed(1)} µg/m³ at ${peak.hour_label || ''}`;
+                shelfTrendText.textContent = `Next ${shown} of ${state.forecastData.length} hours · peak ${peak.pm25.toFixed(1)} µg/m³ at ${peak.hour_label || ''}`;
             }
             renderSplineTimeline();
         });
@@ -420,12 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
             btnForecast.classList.remove('active');
             if (btnVerify) btnVerify.classList.remove('active');
             state.timelineMode = 'history';
-            if (timelineTitle) timelineTitle.textContent = 'Latest readings';
+            if (timelineTitle) timelineTitle.textContent = 'Latest hours';
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText && state.historyData?.length) {
                 const latest = state.historyData[state.historyData.length - 1];
                 const shown = Math.min(8, state.historyData.length);
-                shelfTrendText.textContent = `Latest ${shown} of ${state.historyData.length} · ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
+                shelfTrendText.textContent = `Latest ${shown} of ${state.historyData.length} hours · ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
             }
             renderSplineTimeline();
         });
