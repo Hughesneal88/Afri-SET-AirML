@@ -281,6 +281,11 @@ def build():
 /api/live_telemetry /data/telemetry.json 200
 /api/forecast   /.netlify/functions/forecast  200
 /api/readings   /.netlify/functions/readings  200
+/api/auth/generate-key /.netlify/functions/generate-key  200
+/api/register   /.netlify/functions/register  200
+/api/login      /.netlify/functions/login  200
+/api/me         /.netlify/functions/me  200
+/api/logout     /.netlify/functions/logout  200
 /history        /history.html           200
 
 # Optional: If you deploy your Flask backend to Render/Railway, proxy all /api calls:
@@ -328,6 +333,31 @@ def build():
 [[redirects]]
   from = "/api/readings"
   to = "/.netlify/functions/readings"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth/generate-key"
+  to = "/.netlify/functions/generate-key"
+  status = 200
+
+[[redirects]]
+  from = "/api/register"
+  to = "/.netlify/functions/register"
+  status = 200
+
+[[redirects]]
+  from = "/api/login"
+  to = "/.netlify/functions/login"
+  status = 200
+
+[[redirects]]
+  from = "/api/me"
+  to = "/.netlify/functions/me"
+  status = 200
+
+[[redirects]]
+  from = "/api/logout"
+  to = "/.netlify/functions/logout"
   status = 200
 
 [[redirects]]

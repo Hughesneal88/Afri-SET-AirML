@@ -38,6 +38,31 @@
   status = 200
 
 [[redirects]]
+  from = "/api/auth/generate-key"
+  to = "/.netlify/functions/generate-key"
+  status = 200
+
+[[redirects]]
+  from = "/api/register"
+  to = "/.netlify/functions/register"
+  status = 200
+
+[[redirects]]
+  from = "/api/login"
+  to = "/.netlify/functions/login"
+  status = 200
+
+[[redirects]]
+  from = "/api/me"
+  to = "/.netlify/functions/me"
+  status = 200
+
+[[redirects]]
+  from = "/api/logout"
+  to = "/.netlify/functions/logout"
+  status = 200
+
+[[redirects]]
   from = "/history"
   to = "/history.html"
   status = 200

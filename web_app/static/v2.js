@@ -1549,6 +1549,12 @@ Low-cost optical particle sensors encounter significant non-linear interference 
         const authModalTitle = document.getElementById('authModalTitle');
 
         if (user && user.unique_key) {
+            localStorage.setItem('airsense_user', JSON.stringify({
+                id: user.id,
+                username: user.username,
+                unique_key: user.unique_key,
+                email: user.email
+            }));
             const initial = (user.username || 'U').charAt(0).toUpperCase();
             if (userAvatarIcon) userAvatarIcon.textContent = initial;
             if (userNameLabel) userNameLabel.textContent = user.username || 'User';
@@ -1563,6 +1569,7 @@ Low-cost optical particle sensors encounter significant non-linear interference 
             if (profileUniqueKey) profileUniqueKey.textContent = user.unique_key;
             if (authModalTitle) authModalTitle.textContent = 'Your AirSense Profile';
         } else {
+            localStorage.removeItem('airsense_user');
             if (userAvatarIcon) userAvatarIcon.textContent = 'G';
             if (userNameLabel) userNameLabel.textContent = 'Guest';
             if (chatStorageText) chatStorageText.textContent = 'Browser Storage (Guest Mode)';
@@ -1577,6 +1584,11 @@ Low-cost optical particle sensors encounter significant non-linear interference 
 
     async function checkAuthSession() {
         try {
+            const saved = JSON.parse(localStorage.getItem('airsense_user') || 'null');
+            if (saved && saved.unique_key) {
+                updateAuthUI(saved);
+                return;
+            }
             const res = await fetch('/api/me');
             const data = await res.json();
             if (data.status === 'success' && data.user) {
