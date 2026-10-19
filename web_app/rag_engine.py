@@ -49,7 +49,10 @@ def calculate_us_epa_aqi(pm25_value):
     Formula: I = ((I_hi - I_lo) / (C_hi - C_lo)) * (C - C_lo) + I_lo
     """
     c = max(0.0, float(pm25_value))
-    
+    # EPA truncates PM2.5 to one decimal before the breakpoint lookup.
+    # 12.04 would otherwise fall in the 12.0–12.1 gap and come back as AQI 0.
+    c = int(c * 10 + 1e-8) / 10.0
+
     breakpoints = [
         (0.0, 12.0, 0, 50, "Good", "#34d399"),
         (12.1, 35.4, 51, 100, "Moderate", "#fbbf24"),

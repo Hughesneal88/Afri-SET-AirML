@@ -57,6 +57,112 @@ def get_forecaster():
     return None
 
 
+def load_recent_observed_hours(now_h=None, lookback_hours=48, limit=None):
+    """
+    Every stored telemetry recording, oldest first.
+
+    Readings are not averaged into hours and not cut to a 24- or 48-hour
+    window. lookback_hours and limit are accepted so older callers keep
+    working, and they do not drop recordings.
+    """
+    del now_h, lookback_hours, limit
+    try:
+        from web_app.db import get_all_raw_telemetry
+        records = get_all_raw_telemetry() or []
+    except Exception:
+        return []
+
+    observed = []
+    for rec in records:
+        ts = pd.to_datetime(rec.get("timestamp"), errors="coerce")
+        if pd.isna(ts):
+            continue
+        try:
+            raw_pm = float(rec.get("raw_pm25"))
+            temp = float(rec.get("temperature"))
+            rh = float(rec.get("humidity"))
+        except (TypeError, ValueError):
+            continue
+        observed.append({
+            "timestamp": pd.Timestamp(ts),
+            "raw_pm25": raw_pm,
+            "temp": temp,
+            "rh": rh
+        })
+    observed.sort(key=lambda row: row["timestamp"])
+    return observed
+
+
+def _hour_label(ts, show_date):
+    clock = ts.strftime("%H:%M:%S")
+    if show_date:
+        return f"{int(ts.day)} {ts.strftime('%b')} {clock}"
+    return clock
+
+
+def build_observed_track_from_logs(logged_hours, telemetry):
+    """
+    Turns each stored recording into a history-shelf point.
+    Logged PM2.5 is kept as stored. The live calibrated ratio is applied only
+    when that live sample is from the same few hours, so an unrelated snapshot
+    cannot rescale the record. A live sample is appended, never used to
+    replace a recording already in the log.
+    """
+    live_pm = float(telemetry.get("calibrated_pm25", 12.0) or 12.0)
+    live_raw = float(telemetry.get("raw_pm25", live_pm) or live_pm)
+    live_ts = pd.to_datetime(telemetry.get("timestamp"), errors="coerce")
+    cal_ratio = live_pm / max(1.0, live_raw)
+
+    span_hours = 0.0
+    if len(logged_hours) >= 2:
+        span_hours = (
+            pd.Timestamp(logged_hours[-1]["timestamp"]) - pd.Timestamp(logged_hours[0]["timestamp"])
+        ).total_seconds() / 3600.0
+    show_date = span_hours > 26.0
+
+    track = []
+    for rec in logged_hours:
+        ts = pd.Timestamp(rec["timestamp"])
+        raw_v = float(rec["raw_pm25"])
+        same_period = pd.notna(live_ts) and abs((ts - live_ts).total_seconds()) <= 6 * 3600
+        val = max(1.0, raw_v * cal_ratio) if same_period else max(1.0, raw_v)
+        aqi_info = calculate_us_epa_aqi(val)
+        track.append({
+            "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "hour_label": _hour_label(ts, show_date),
+            "pm25": round(val, 2),
+            "raw_pm25": round(raw_v, 2),
+            "temp": round(float(rec["temp"]), 1),
+            "rh": round(float(rec["rh"]), 1),
+            "aqi_score": aqi_info["aqi_score"],
+            "aqi_category": aqi_info["category"],
+            "aqi_color": aqi_info["color"]
+        })
+
+    if not track or pd.isna(live_ts):
+        return track
+
+    last_ts = pd.to_datetime(track[-1]["timestamp"])
+    delta_h = (pd.Timestamp(live_ts) - last_ts).total_seconds() / 3600.0
+    if delta_h <= 0 or delta_h > 6:
+        return track
+
+    aqi_info = calculate_us_epa_aqi(live_pm)
+    live_point = {
+        "timestamp": pd.Timestamp(live_ts).floor("h").strftime("%Y-%m-%d %H:%M:%S"),
+        "hour_label": _hour_label(pd.Timestamp(live_ts), show_date),
+        "pm25": round(live_pm, 2),
+        "raw_pm25": round(live_raw, 2),
+        "temp": round(float(telemetry.get("temperature", track[-1]["temp"])), 1),
+        "rh": round(float(telemetry.get("humidity", track[-1]["rh"])), 1),
+        "aqi_score": aqi_info["aqi_score"],
+        "aqi_category": aqi_info["category"],
+        "aqi_color": aqi_info["color"]
+    }
+    track.append(live_point)
+    return track
+
+
 def build_current_period_history(telemetry, now_h):
     """
     Builds a continuous 48-hour hourly sequence anchored strictly to the
@@ -179,27 +285,33 @@ def get_24h_forecast():
         now_h = pd.Timestamp.now().floor('h')
         history_df = build_current_period_history(telemetry, now_h)
 
-        # 2. Historical Observed Track (Past 24 hours leading up to current hour)
-        last_24_df = history_df.iloc[-24:].copy()
-        observed_track = []
-        target_col = 'PM25' if 'PM25' in last_24_df.columns and not last_24_df['PM25'].isna().all() else 'pm25'
+        # 2. Historical observed track. Prefer the newest logged hours so a
+        # quiet sensor does not get replaced by a synthetic curve, and so the
+        # latest stored hour stays in the series the shelf draws.
+        logged_hours = load_recent_observed_hours(now_h)
+        if logged_hours:
+            observed_track = build_observed_track_from_logs(logged_hours, telemetry)
+        else:
+            last_24_df = history_df.iloc[-24:].copy()
+            observed_track = []
+            target_col = 'PM25' if 'PM25' in last_24_df.columns and not last_24_df['PM25'].isna().all() else 'pm25'
 
-        for _, row in last_24_df.iterrows():
-            ts = pd.to_datetime(row['timestamp'])
-            val = float(row[target_col])
-            raw_v = float(row.get('pm25', val))
-            aqi_info = calculate_us_epa_aqi(val)
-            observed_track.append({
-                "timestamp": ts.strftime('%Y-%m-%d %H:%M:%S'),
-                "hour_label": ts.strftime('%H:00'),
-                "pm25": round(val, 2),
-                "raw_pm25": round(raw_v, 2),
-                "temp": round(float(row.get('sample_temp', 28.0)), 1),
-                "rh": round(float(row.get('sample_rh', 75.0)), 1),
-                "aqi_score": aqi_info["aqi_score"],
-                "aqi_category": aqi_info["category"],
-                "aqi_color": aqi_info["color"]
-            })
+            for _, row in last_24_df.iterrows():
+                ts = pd.to_datetime(row['timestamp'])
+                val = float(row[target_col])
+                raw_v = float(row.get('pm25', val))
+                aqi_info = calculate_us_epa_aqi(val)
+                observed_track.append({
+                    "timestamp": ts.strftime('%Y-%m-%d %H:%M:%S'),
+                    "hour_label": ts.strftime('%H:00'),
+                    "pm25": round(val, 2),
+                    "raw_pm25": round(raw_v, 2),
+                    "temp": round(float(row.get('sample_temp', 28.0)), 1),
+                    "rh": round(float(row.get('sample_rh', 75.0)), 1),
+                    "aqi_score": aqi_info["aqi_score"],
+                    "aqi_category": aqi_info["category"],
+                    "aqi_color": aqi_info["color"]
+                })
 
         current_obs = observed_track[-1]
 

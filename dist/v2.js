@@ -373,7 +373,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ═══════════════════════════════════════════════════════ 24-HOUR SPLINE WAVE TIMELINE
     async function fetchForecastData() {
         try {
-            const res = await fetch('/api/forecast');
+            let res = await fetch('/api/forecast');
+            if (!res.ok) {
+                res = await fetch('/data/forecast.json');
+            }
             if (!res.ok) return;
             const data = await res.json();
             state.forecastData = data.forecast || [];
@@ -410,7 +413,19 @@ document.addEventListener('DOMContentLoaded', () => {
             btnHistory.classList.add('active');
             btnForecast.classList.remove('active');
             state.timelineMode = 'history';
-            if (timelineTitle) timelineTitle.textContent = '24-Hour Observed History';
+            if (timelineTitle) {
+                const newest = state.historyData?.[state.historyData.length - 1];
+                const oldest = state.historyData?.[0];
+                const spanHrs = newest?.timestamp && oldest?.timestamp
+                    ? (new Date(newest.timestamp.replace(' ', 'T')) - new Date(oldest.timestamp.replace(' ', 'T'))) / 36e5
+                    : 0;
+                timelineTitle.textContent = spanHrs > 26 ? 'All Observed Recordings' : '24-Hour Observed History';
+            }
+            const shelfTrendText = document.getElementById('shelfTrendText');
+            if (shelfTrendText && state.historyData?.length) {
+                const latest = state.historyData[state.historyData.length - 1];
+                shelfTrendText.textContent = `${state.historyData.length} recordings · latest ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
+            }
             renderSplineTimeline();
         });
     }
@@ -419,12 +434,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const rawPoints = state.timelineMode === 'forecast' ? state.forecastData : state.historyData;
         if (!rawPoints || rawPoints.length === 0) return;
 
-        // Take 8 evenly spaced nodes for clean display
-        const step = Math.max(1, Math.floor(rawPoints.length / 8));
+        const keepEveryRecording = state.timelineMode === 'history';
         const sampleNodes = [];
-        for (let i = 0; i < rawPoints.length; i += step) {
-            sampleNodes.push(rawPoints[i]);
-            if (sampleNodes.length >= 8) break;
+        if (keepEveryRecording) {
+            sampleNodes.push(...rawPoints);
+        } else {
+            const nodeCount = Math.min(8, rawPoints.length);
+            if (nodeCount === 1) {
+                sampleNodes.push(rawPoints[rawPoints.length - 1]);
+            } else {
+                const lastIdx = rawPoints.length - 1;
+                for (let i = 0; i < nodeCount; i++) {
+                    const idx = Math.round((i * lastIdx) / (nodeCount - 1));
+                    sampleNodes.push(rawPoints[idx]);
+                }
+            }
         }
 
         const nodesRow = document.getElementById('timelineNodesRow');
@@ -436,6 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!nodesRow || !splineArea || !splineStroke || !container) return;
 
         nodesRow.innerHTML = '';
+        const dense = keepEveryRecording && sampleNodes.length > 16;
+        nodesRow.classList.toggle('is-dense', dense);
         const minVal = Math.min(...sampleNodes.map(n => n.pm25));
         const maxVal = Math.max(...sampleNodes.map(n => n.pm25));
         const range = (maxVal - minVal) || 1;
@@ -443,19 +469,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const coords = [];
         const containerWidth = container.clientWidth || 800;
         const containerHeight = 80;
+        const denom = Math.max(sampleNodes.length - 1, 1);
+        let lastLabelX = -1e9;
 
         sampleNodes.forEach((node, idx) => {
-            const xPercent = (idx / (sampleNodes.length - 1)) * 100;
             const normY = (node.pm25 - minVal) / range;
-            // Inverted for SVG Y coordinates (top = 15px, bottom = 65px)
             const yPixel = 60 - (normY * 40);
-            const xPixel = (idx / (sampleNodes.length - 1)) * containerWidth;
+            const xPixel = (idx / denom) * containerWidth;
             coords.push({ x: xPixel, y: yPixel });
+
+            const showLabel = !dense || idx === 0 || idx === sampleNodes.length - 1 || (xPixel - lastLabelX) >= 96;
+            if (showLabel) lastLabelX = xPixel;
 
             // Create Node DOM Element
             const item = document.createElement('div');
-            item.className = 't-node-item';
-            item.style.position = 'relative';
+            item.className = showLabel ? 't-node-item is-labeled' : 't-node-item';
+            if (dense) {
+                item.style.position = 'absolute';
+                item.style.left = `${(idx / denom) * 100}%`;
+                item.style.top = '50%';
+                item.style.transform = 'translate(-50%, -50%)';
+            } else {
+                item.style.position = 'relative';
+            }
 
             const hourLbl = node.hour_label || node.timestamp?.split(' ')[1]?.substring(0, 5) || `${idx * 3}:00`;
             const pmVal = node.pm25.toFixed(1);
@@ -477,7 +513,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     tooltip.style.left = `${rect.left - parentRect.left - 20}px`;
                     tooltip.style.top = `-45px`;
 
-                    document.getElementById('ttTime').textContent = `${hourLbl} Horizon`;
+                    const observedAt = node.timestamp || hourLbl;
+                    const modeLabel = state.timelineMode === 'history' ? 'Observed' : 'Horizon';
+                    const place = state.timelineMode === 'history' ? ` · ${idx + 1} of ${sampleNodes.length}` : '';
+                    document.getElementById('ttTime').textContent = `${observedAt} · ${modeLabel}${place}`;
                     document.getElementById('ttVal').textContent = `${pmVal} µg/m³ PM2.5`;
                     document.getElementById('ttAqi').textContent = `AQI ${aqiScore} · ${aqiCat}`;
                 }
@@ -511,6 +550,30 @@ document.addEventListener('DOMContentLoaded', () => {
             splineStroke.setAttribute('d', pathD);
             const areaD = `${pathD} L ${containerWidth} ${containerHeight} L 0 ${containerHeight} Z`;
             splineArea.setAttribute('d', areaD);
+        }
+
+        if (dense && tooltip) {
+            container.onmousemove = (event) => {
+                const rect = container.getBoundingClientRect();
+                const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
+                const clamped = Math.min(1, Math.max(0, ratio));
+                const nearest = Math.round(clamped * (sampleNodes.length - 1));
+                const node = sampleNodes[nearest];
+                if (!node) return;
+                const pmVal = Number(node.pm25).toFixed(1);
+                tooltip.style.display = 'flex';
+                tooltip.style.left = `${clamped * rect.width - 20}px`;
+                tooltip.style.top = '-45px';
+                document.getElementById('ttTime').textContent = `${node.timestamp || node.hour_label} · Observed · ${nearest + 1} of ${sampleNodes.length}`;
+                document.getElementById('ttVal').textContent = `${pmVal} µg/m³ PM2.5`;
+                document.getElementById('ttAqi').textContent = `AQI ${node.aqi_score ?? ''} · ${node.aqi_category ?? ''}`;
+            };
+            container.onmouseleave = () => {
+                tooltip.style.display = 'none';
+            };
+        } else {
+            container.onmousemove = null;
+            container.onmouseleave = null;
         }
     }
 

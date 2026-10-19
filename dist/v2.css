@@ -993,6 +993,43 @@ body.theme-night .cloud-puff {
     color: #ffffff;
 }
 
+.timeline-nodes-row.is-dense {
+    display: block;
+    min-width: 0;
+}
+
+.spline-timeline-container:has(.timeline-nodes-row.is-dense) {
+    overflow: hidden;
+}
+
+.timeline-nodes-row.is-dense .t-node-item {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    padding: 0;
+    scroll-snap-align: none;
+}
+
+.timeline-nodes-row.is-dense .t-node-hour,
+.timeline-nodes-row.is-dense .t-node-val,
+.timeline-nodes-row.is-dense .t-node-subval {
+    display: none;
+}
+
+.timeline-nodes-row.is-dense .t-node-item.is-labeled .t-node-hour,
+.timeline-nodes-row.is-dense .t-node-item.is-labeled .t-node-val {
+    display: block;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 1.1;
+}
+
+.timeline-nodes-row.is-dense .t-node-dot {
+    width: 5px;
+    height: 5px;
+    border-width: 1px;
+}
+
 /* Floating Tooltip */
 .node-hover-tooltip {
     position: absolute;

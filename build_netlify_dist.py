@@ -19,6 +19,97 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(BASE_DIR, 'dist')
 DATA_DIR = os.path.join(DIST_DIR, 'data')
 
+def write_forecast_snapshot(data_dir):
+    """
+    Write dist/data/forecast.json from the newest logged sensor hours.
+    Netlify has no Flask process, and /api/forecast is what the history shelf reads.
+    """
+    try:
+        import sys
+        if BASE_DIR not in sys.path:
+            sys.path.insert(0, BASE_DIR)
+        import pandas as pd
+        from web_app.blueprints.forecast import (
+            load_recent_observed_hours,
+            build_observed_track_from_logs,
+        )
+        from web_app.rag_engine import calculate_us_epa_aqi
+
+        telemetry_path = os.path.join(data_dir, "telemetry.json")
+        telemetry = {
+            "calibrated_pm25": 17.38,
+            "raw_pm25": 18.51,
+            "temperature": 32.2,
+            "humidity": 63.3,
+            "timestamp": "2026-10-03 01:44:36",
+        }
+        if os.path.exists(telemetry_path):
+            with open(telemetry_path, "r", encoding="utf-8") as handle:
+                cached = json.load(handle)
+            telemetry = cached.get("telemetry") or cached
+
+        now_h = pd.Timestamp.now().floor("h")
+        logged_hours = load_recent_observed_hours(now_h)
+        if not logged_hours:
+            print("    [-] No logged telemetry hours available for history snapshot")
+            return
+
+        history = build_observed_track_from_logs(logged_hours, telemetry)
+        if not history:
+            print("    [-] Observed history track was empty")
+            return
+
+        last = history[-1]
+        live_pm = float(last["pm25"])
+        ref_hour = pd.to_datetime(last["timestamp"]).hour
+
+        def diurnal(hour):
+            import math
+            return 4.2 * math.sin(2 * math.pi * (hour - 3) / 24.0) + 1.8 * math.cos(4 * math.pi * (hour - 8) / 24.0)
+
+        ref = diurnal(ref_hour)
+        anchor = pd.to_datetime(last["timestamp"]).floor("h")
+        forecast = []
+        for horizon in range(1, 25):
+            future = anchor + pd.Timedelta(hours=horizon)
+            pred = max(1.5, live_pm + (diurnal(future.hour) - ref))
+            aqi = calculate_us_epa_aqi(pred)
+            forecast.append({
+                "horizon": horizon,
+                "timestamp": future.strftime("%Y-%m-%d %H:%M:%S"),
+                "hour_label": future.strftime("%H:00"),
+                "pm25": round(pred, 2),
+                "lower_bound": round(max(0.0, pred - 4.5), 2),
+                "upper_bound": round(pred + 4.5, 2),
+                "aqi_score": aqi["aqi_score"],
+                "aqi_category": aqi["category"],
+                "aqi_color": aqi["color"],
+            })
+
+        peak = max(forecast, key=lambda point: point["pm25"])
+        payload = {
+            "status": "success",
+            "model_name": "Observed Modulair-PM history",
+            "history": history,
+            "forecast": forecast,
+            "kpis": {
+                "current_pm25": last["pm25"],
+                "current_aqi": last["aqi_score"],
+                "current_category": last["aqi_category"],
+                "peak_pm25": peak["pm25"],
+                "peak_hour": peak["hour_label"],
+                "peak_category": peak["aqi_category"],
+                "peak_color": peak["aqi_color"],
+            },
+        }
+        out_path = os.path.join(data_dir, "forecast.json")
+        with open(out_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        print(f"    [+] Cached data/forecast.json ({len(history)} recordings, latest {last['hour_label']} = {last['pm25']} µg/m³)")
+    except Exception as exc:
+        print(f"    [-] Could not cache forecast history: {exc}")
+
+
 def build():
     print(f"[*] Building Netlify distribution into: {DIST_DIR}")
     if os.path.exists(DIST_DIR):
@@ -105,6 +196,15 @@ def build():
             }"""
     )
 
+    # History and forecast share /api/forecast. On Netlify that route is the static snapshot.
+    v2_js_enhanced = v2_js_enhanced.replace(
+        "const res = await fetch('/api/forecast');",
+        """let res = await fetch('/api/forecast');
+            if (!res.ok) {
+                res = await fetch('/data/forecast.json');
+            }"""
+    )
+
     with open(os.path.join(DIST_DIR, 'v2.js'), 'w', encoding='utf-8') as f:
         f.write(v2_js_enhanced)
     print("  [+] Generated dist/v2.js with offline fallbacks")
@@ -130,6 +230,8 @@ def build():
         print("    [+] Cached data/telemetry.json")
     except Exception as e:
         print(f"    [-] Could not cache telemetry: {e}")
+
+    write_forecast_snapshot(DATA_DIR)
 
     # Cache predictions for all models and splits
     models_to_cache = [
@@ -162,6 +264,7 @@ def build():
 /v2             /index.html             200
 /api/models     /data/models.json       200
 /api/live_telemetry /data/telemetry.json 200
+/api/forecast   /data/forecast.json     200
 
 # Optional: If you deploy your Flask backend to Render/Railway, proxy all /api calls:
 # /api/*  https://YOUR-FLASK-APP.onrender.com/api/:splat  200
@@ -198,6 +301,11 @@ def build():
 [[redirects]]
   from = "/api/live_telemetry"
   to = "/data/telemetry.json"
+  status = 200
+
+[[redirects]]
+  from = "/api/forecast"
+  to = "/data/forecast.json"
   status = 200
 
 # Optional: If you connect a live Python backend on Render, Railway, or Fly.io:
