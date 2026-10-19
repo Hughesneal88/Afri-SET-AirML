@@ -279,7 +279,8 @@ def build():
 /v2             /index.html             200
 /api/models     /data/models.json       200
 /api/live_telemetry /data/telemetry.json 200
-/api/forecast   /data/forecast.json     200
+/api/forecast   /.netlify/functions/forecast  200
+/api/readings   /.netlify/functions/readings  200
 /history        /history.html           200
 
 # Optional: If you deploy your Flask backend to Render/Railway, proxy all /api calls:
@@ -321,7 +322,12 @@ def build():
 
 [[redirects]]
   from = "/api/forecast"
-  to = "/data/forecast.json"
+  to = "/.netlify/functions/forecast"
+  status = 200
+
+[[redirects]]
+  from = "/api/readings"
+  to = "/.netlify/functions/readings"
   status = 200
 
 [[redirects]]

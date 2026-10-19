@@ -1,0 +1,7 @@
+{
+  "name": "airsense-netlify-functions",
+  "private": true,
+  "dependencies": {
+    "mongodb": "^6.20.0"
+  }
+}

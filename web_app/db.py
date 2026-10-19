@@ -530,18 +530,33 @@ def save_raw_telemetry_batch(telemetry_records):
     now = datetime.datetime.utcnow()
     docs = []
     for r in telemetry_records:
+        timestamp = str(r.get("timestamp"))
+        raw_pm25 = float(r.get("raw_pm25", 0.0))
+        temperature = float(r.get("temperature", 0.0))
+        humidity = float(r.get("humidity", 0.0))
+        device_sn = r.get("device_sn") or "MOD-PM-01068"
         docs.append({
-            "timestamp": str(r.get("timestamp")),
-            "raw_pm25": float(r.get("raw_pm25", 0.0)),
-            "temperature": float(r.get("temperature", 0.0)),
-            "humidity": float(r.get("humidity", 0.0)),
-            "device_sn": r.get("device_sn", "MOD-PM-01068"),
+            "timestamp": timestamp,
+            "raw_pm25": raw_pm25,
+            "temperature": temperature,
+            "humidity": humidity,
+            "device_sn": device_sn,
+            "reading_key": f"{timestamp}|{raw_pm25}|{temperature}|{humidity}|{device_sn}",
             "created_at": now
         })
 
     if not mongo_mgr.use_fallback:
-        result = mongo_mgr.db.raw_telemetry_logs.insert_many(docs)
-        return len(result.inserted_ids)
+        collection = mongo_mgr.db.raw_telemetry_logs
+        stored = 0
+        for doc in docs:
+            result = collection.update_one(
+                {"reading_key": doc["reading_key"]},
+                {"$setOnInsert": doc},
+                upsert=True
+            )
+            if result.upserted_id is not None:
+                stored += 1
+        return stored
     else:
         import sqlite3
         conn = _get_fallback_conn()

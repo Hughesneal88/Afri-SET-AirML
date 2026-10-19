@@ -3,3 +3,5 @@ openaq_data/
 
 # Local Netlify folder
 .netlify
+node_modules/
+netlify/functions/node_modules/

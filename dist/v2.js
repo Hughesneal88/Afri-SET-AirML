@@ -120,6 +120,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ═══════════════════════════════════════════════════════ LIVE TELEMETRY STREAM
+    function storeTelemetryReading(tel) {
+        if (!tel || tel.raw_pm25 == null || !tel.timestamp || String(tel.timestamp).includes("Fallback")) return;
+        fetch("/api/readings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                timestamp: tel.timestamp,
+                raw_pm25: tel.raw_pm25,
+                temperature: tel.temperature,
+                humidity: tel.humidity,
+                device_sn: tel.device_sn || "MOD-PM-01068"
+            })
+        }).catch(() => {});
+    }
+
     async function fetchLiveTelemetry() {
         try {
             const res = await fetch('/api/live_telemetry?model_key=stacked_physics_meta_ensemble');
@@ -181,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Animate sparkline wave path
             animateDriftSparkline();
+            storeTelemetryReading(tel);
         } catch (err) {
             console.warn('Live telemetry polling error:', err);
         }

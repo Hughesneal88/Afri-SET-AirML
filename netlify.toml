@@ -29,7 +29,12 @@
 
 [[redirects]]
   from = "/api/forecast"
-  to = "/data/forecast.json"
+  to = "/.netlify/functions/forecast"
+  status = 200
+
+[[redirects]]
+  from = "/api/readings"
+  to = "/.netlify/functions/readings"
   status = 200
 
 [[redirects]]
