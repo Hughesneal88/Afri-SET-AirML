@@ -405,11 +405,12 @@ document.addEventListener('DOMContentLoaded', () => {
             btnHistory.classList.remove('active');
             if (btnVerify) btnVerify.classList.remove('active');
             state.timelineMode = 'forecast';
-            if (timelineTitle) timelineTitle.textContent = '24-Hour Predictive Horizon';
+            if (timelineTitle) timelineTitle.textContent = 'Next hours on the home shelf';
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText && state.forecastData?.length) {
-                const peak = state.forecastData.reduce((prev, curr) => (curr.pm25 > prev.pm25) ? curr : prev, state.forecastData[0]);
-                shelfTrendText.textContent = `Forecast Peak: ${peak.pm25.toFixed(1)} µg/m³ at ${peak.hour_label || '07:00'}`;
+                const shown = Math.min(8, state.forecastData.length);
+                const peak = state.forecastData.slice(0, shown).reduce((prev, curr) => (curr.pm25 > prev.pm25) ? curr : prev, state.forecastData[0]);
+                shelfTrendText.textContent = `Next ${shown} of ${state.forecastData.length} forecast hours · peak ${peak.pm25.toFixed(1)} µg/m³ at ${peak.hour_label || ''}`;
             }
             renderSplineTimeline();
         });
@@ -419,18 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
             btnForecast.classList.remove('active');
             if (btnVerify) btnVerify.classList.remove('active');
             state.timelineMode = 'history';
-            if (timelineTitle) {
-                const newest = state.historyData?.[state.historyData.length - 1];
-                const oldest = state.historyData?.[0];
-                const spanHrs = newest?.timestamp && oldest?.timestamp
-                    ? (new Date(newest.timestamp.replace(' ', 'T')) - new Date(oldest.timestamp.replace(' ', 'T'))) / 36e5
-                    : 0;
-                timelineTitle.textContent = spanHrs > 26 ? 'All Observed Recordings' : '24-Hour Observed History';
-            }
+            if (timelineTitle) timelineTitle.textContent = 'Latest readings';
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText && state.historyData?.length) {
                 const latest = state.historyData[state.historyData.length - 1];
-                shelfTrendText.textContent = `${state.historyData.length} recordings · latest ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
+                const shown = Math.min(8, state.historyData.length);
+                shelfTrendText.textContent = `Latest ${shown} of ${state.historyData.length} · ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
             }
             renderSplineTimeline();
         });
@@ -442,12 +437,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnForecast) btnForecast.classList.remove('active');
             if (btnHistory) btnHistory.classList.remove('active');
             state.timelineMode = 'verify';
-            if (timelineTitle) timelineTitle.textContent = '24-Hour Forecast Verification (Forecast vs Actuals)';
+            if (timelineTitle) timelineTitle.textContent = 'Did the latest forecasts come true?';
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText) {
                 shelfTrendText.textContent = (state.verificationKpis && state.verificationKpis.status_summary)
                     ? state.verificationKpis.status_summary
-                    : 'Forecast Verification: R² = 0.914 · MAE = 1.18 µg/m³ (95.8% Within CI)';
+                    : 'MAE and MBE appear when a later reading can score the forecast.';
             }
             renderSplineTimeline();
         });
@@ -464,24 +459,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!rawPoints || rawPoints.length === 0) return;
 
-        // History keeps every stored recording. Forecast and verify stay on
-        // eight labels so those shelves remain readable.
-        const keepEveryRecording = state.timelineMode === 'history';
-        const sampleNodes = [];
-        if (keepEveryRecording) {
-            sampleNodes.push(...rawPoints);
-        } else {
-            const nodeCount = Math.min(8, rawPoints.length);
-            if (nodeCount === 1) {
-                sampleNodes.push(rawPoints[rawPoints.length - 1]);
-            } else {
-                const lastIdx = rawPoints.length - 1;
-                for (let i = 0; i < nodeCount; i++) {
-                    const idx = Math.round((i * lastIdx) / (nodeCount - 1));
-                    sampleNodes.push(rawPoints[idx]);
-                }
-            }
-        }
+        // The home shelf shows a short slice. The full series lives on /history.
+        const homeCount = 8;
+        const sampleNodes = state.timelineMode === 'forecast'
+            ? rawPoints.slice(0, homeCount)
+            : rawPoints.slice(-homeCount);
+        const dense = false;
 
         const nodesRow = document.getElementById('timelineNodesRow');
         const splineArea = document.getElementById('splineAreaPath');
@@ -492,7 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!nodesRow || !splineArea || !splineStroke || !container) return;
 
         nodesRow.innerHTML = '';
-        const dense = keepEveryRecording && sampleNodes.length > 16;
         nodesRow.classList.toggle('is-dense', dense);
         const minVal = Math.min(...sampleNodes.map(n => n.pm25 ?? 10));
         const maxVal = Math.max(...sampleNodes.map(n => n.pm25 ?? 25));
@@ -551,9 +533,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         tooltip.style.left = `${rect.left - parentRect.left - 20}px`;
                         tooltip.style.top = `-55px`;
 
-                        document.getElementById('ttTime').textContent = `${hourLbl} · Verification`;
-                        document.getElementById('ttVal').textContent = `Forecast: ${fVal} · Actual: ${aVal} µg/m³ (Δ: ${errVal})`;
-                        document.getElementById('ttAqi').textContent = `90% Bounds: ${node.lower_bound ?? 0}–${node.upper_bound ?? 0} µg/m³ · ${node.within_bounds ? 'Within CI' : 'Deviation'}`;
+                        const verdict = node.came_true || node.within_bounds ? 'Came true' : 'Missed';
+                        document.getElementById('ttTime').textContent = `${node.timestamp || hourLbl} · ${verdict}`;
+                        document.getElementById('ttVal').textContent = `Forecast ${fVal} · Actual ${aVal} µg/m³ (Δ ${errVal})`;
+                        document.getElementById('ttAqi').textContent = `Within 2.0 µg/m³ counts as true · issued ${node.issued_label || 'previously'}`;
                     }
                 });
             } else {

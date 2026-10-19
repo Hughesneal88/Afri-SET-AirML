@@ -75,6 +75,10 @@
                     <i class="fa-solid fa-sparkles"></i>
                     <span>AI Chat</span>
                 </button>
+                <a class="nav-pill-btn" href="/history" title="Full history, forecasts, and whether they came true">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </a>
             </nav>
 
             <!-- Right Utility Controls -->
@@ -282,9 +286,9 @@
 
                 <!-- Forecast / History / Verify Mode Toggle -->
                 <div class="shelf-mode-pill">
-                    <button class="shelf-pill-btn active" id="btnModeForecast">Forecast (24h)</button>
-                    <button class="shelf-pill-btn" id="btnModeHistory">History (24h)</button>
-                    <button class="shelf-pill-btn" id="btnModeVerify">Verify Forecast</button>
+                    <button class="shelf-pill-btn active" id="btnModeForecast">Forecast</button>
+                    <button class="shelf-pill-btn" id="btnModeHistory">Latest</button>
+                    <button class="shelf-pill-btn" id="btnModeVerify">Came true</button>
                 </div>
 
                 <!-- Dynamic KPI Summary Badge -->
@@ -292,6 +296,7 @@
                     <span class="trend-icon" id="shelfTrendIcon"><i class="fa-solid fa-arrow-trend-up"></i></span>
                     <span id="shelfTrendText">Diurnal Peak: 17.7 µg/m³ at 07:00</span>
                 </div>
+                <a class="shelf-full-link" href="/history">Full history</a>
             </div>
 
             <!-- Continuous Spline Wave & Nodes Track -->

@@ -122,10 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ═══════════════════════════════════════════════════════ LIVE TELEMETRY STREAM
     async function fetchLiveTelemetry() {
         try {
-            let res = await fetch('/api/live_telemetry?model_key=stacked_physics_meta_ensemble');
-            if (!res.ok) {
-                res = await fetch('/data/telemetry.json');
-            }
+            const res = await fetch('/api/live_telemetry?model_key=stacked_physics_meta_ensemble');
             if (!res.ok) return;
             const data = await res.json();
             const tel = data.telemetry || data;
@@ -381,9 +378,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             state.forecastData = data.forecast || [];
             state.historyData = data.history || [];
+            state.verificationData = data.verification?.points || [];
+            state.verificationKpis = data.verification?.kpis || null;
 
             // Update Summary KPI
-            const shelfSummary = document.getElementById('shelfSummaryBadge');
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText && data.kpis) {
                 shelfTrendText.textContent = `${data.kpis.peak_category} Peak: ${data.kpis.peak_pm25.toFixed(1)} µg/m³ at ${data.kpis.peak_hour}`;
@@ -395,61 +393,78 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Forecast vs History Toggle Buttons
+    // Forecast vs History vs Verify Toggle Buttons
     const btnForecast = document.getElementById('btnModeForecast');
     const btnHistory = document.getElementById('btnModeHistory');
+    const btnVerify = document.getElementById('btnModeVerify');
     const timelineTitle = document.getElementById('shelfTimelineTitle');
 
     if (btnForecast && btnHistory) {
         btnForecast.addEventListener('click', () => {
             btnForecast.classList.add('active');
             btnHistory.classList.remove('active');
+            if (btnVerify) btnVerify.classList.remove('active');
             state.timelineMode = 'forecast';
-            if (timelineTitle) timelineTitle.textContent = '24-Hour Predictive Horizon';
+            if (timelineTitle) timelineTitle.textContent = 'Next hours on the home shelf';
+            const shelfTrendText = document.getElementById('shelfTrendText');
+            if (shelfTrendText && state.forecastData?.length) {
+                const shown = Math.min(8, state.forecastData.length);
+                const peak = state.forecastData.slice(0, shown).reduce((prev, curr) => (curr.pm25 > prev.pm25) ? curr : prev, state.forecastData[0]);
+                shelfTrendText.textContent = `Next ${shown} of ${state.forecastData.length} forecast hours · peak ${peak.pm25.toFixed(1)} µg/m³ at ${peak.hour_label || ''}`;
+            }
             renderSplineTimeline();
         });
 
         btnHistory.addEventListener('click', () => {
             btnHistory.classList.add('active');
             btnForecast.classList.remove('active');
+            if (btnVerify) btnVerify.classList.remove('active');
             state.timelineMode = 'history';
-            if (timelineTitle) {
-                const newest = state.historyData?.[state.historyData.length - 1];
-                const oldest = state.historyData?.[0];
-                const spanHrs = newest?.timestamp && oldest?.timestamp
-                    ? (new Date(newest.timestamp.replace(' ', 'T')) - new Date(oldest.timestamp.replace(' ', 'T'))) / 36e5
-                    : 0;
-                timelineTitle.textContent = spanHrs > 26 ? 'All Observed Recordings' : '24-Hour Observed History';
-            }
+            if (timelineTitle) timelineTitle.textContent = 'Latest readings';
             const shelfTrendText = document.getElementById('shelfTrendText');
             if (shelfTrendText && state.historyData?.length) {
                 const latest = state.historyData[state.historyData.length - 1];
-                shelfTrendText.textContent = `${state.historyData.length} recordings · latest ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
+                const shown = Math.min(8, state.historyData.length);
+                shelfTrendText.textContent = `Latest ${shown} of ${state.historyData.length} · ${latest.pm25.toFixed(1)} µg/m³ at ${latest.hour_label || 'now'}`;
+            }
+            renderSplineTimeline();
+        });
+    }
+
+    if (btnVerify) {
+        btnVerify.addEventListener('click', () => {
+            btnVerify.classList.add('active');
+            if (btnForecast) btnForecast.classList.remove('active');
+            if (btnHistory) btnHistory.classList.remove('active');
+            state.timelineMode = 'verify';
+            if (timelineTitle) timelineTitle.textContent = 'Did the latest forecasts come true?';
+            const shelfTrendText = document.getElementById('shelfTrendText');
+            if (shelfTrendText) {
+                shelfTrendText.textContent = (state.verificationKpis && state.verificationKpis.status_summary)
+                    ? state.verificationKpis.status_summary
+                    : 'MAE and MBE appear when a later reading can score the forecast.';
             }
             renderSplineTimeline();
         });
     }
 
     function renderSplineTimeline() {
-        const rawPoints = state.timelineMode === 'forecast' ? state.forecastData : state.historyData;
+        const isVerify = state.timelineMode === 'verify';
+        let rawPoints = state.forecastData;
+        if (isVerify) {
+            rawPoints = state.verificationData && state.verificationData.length ? state.verificationData : state.forecastData;
+        } else if (state.timelineMode === 'history') {
+            rawPoints = state.historyData;
+        }
+
         if (!rawPoints || rawPoints.length === 0) return;
 
-        const keepEveryRecording = state.timelineMode === 'history';
-        const sampleNodes = [];
-        if (keepEveryRecording) {
-            sampleNodes.push(...rawPoints);
-        } else {
-            const nodeCount = Math.min(8, rawPoints.length);
-            if (nodeCount === 1) {
-                sampleNodes.push(rawPoints[rawPoints.length - 1]);
-            } else {
-                const lastIdx = rawPoints.length - 1;
-                for (let i = 0; i < nodeCount; i++) {
-                    const idx = Math.round((i * lastIdx) / (nodeCount - 1));
-                    sampleNodes.push(rawPoints[idx]);
-                }
-            }
-        }
+        // The home shelf shows a short slice. The full series lives on /history.
+        const homeCount = 8;
+        const sampleNodes = state.timelineMode === 'forecast'
+            ? rawPoints.slice(0, homeCount)
+            : rawPoints.slice(-homeCount);
+        const dense = false;
 
         const nodesRow = document.getElementById('timelineNodesRow');
         const splineArea = document.getElementById('splineAreaPath');
@@ -460,10 +475,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!nodesRow || !splineArea || !splineStroke || !container) return;
 
         nodesRow.innerHTML = '';
-        const dense = keepEveryRecording && sampleNodes.length > 16;
         nodesRow.classList.toggle('is-dense', dense);
-        const minVal = Math.min(...sampleNodes.map(n => n.pm25));
-        const maxVal = Math.max(...sampleNodes.map(n => n.pm25));
+        const minVal = Math.min(...sampleNodes.map(n => n.pm25 ?? 10));
+        const maxVal = Math.max(...sampleNodes.map(n => n.pm25 ?? 25));
         const range = (maxVal - minVal) || 1;
 
         const coords = [];
@@ -473,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let lastLabelX = -1e9;
 
         sampleNodes.forEach((node, idx) => {
-            const normY = (node.pm25 - minVal) / range;
+            const normY = ((node.pm25 ?? 12) - minVal) / range;
             const yPixel = 60 - (normY * 40);
             const xPixel = (idx / denom) * containerWidth;
             coords.push({ x: xPixel, y: yPixel });
@@ -494,33 +508,62 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const hourLbl = node.hour_label || node.timestamp?.split(' ')[1]?.substring(0, 5) || `${idx * 3}:00`;
-            const pmVal = node.pm25.toFixed(1);
+            const pmVal = (node.pm25 ?? 12).toFixed(1);
             const aqiScore = node.aqi_score ?? 50;
             const aqiCat = node.aqi_category ?? 'Moderate';
 
-            item.innerHTML = `
-                <span class="t-node-hour">${hourLbl}</span>
-                <span class="t-node-dot"></span>
-                <span class="t-node-val">${pmVal}°</span>
-            `;
+            if (isVerify) {
+                const fVal = (node.forecast_pm25 ?? node.pm25 ?? 12).toFixed(1);
+                const aVal = (node.actual_pm25 ?? node.pm25 ?? 12).toFixed(1);
+                const errVal = node.error !== undefined ? (node.error > 0 ? `+${node.error.toFixed(1)}` : `${node.error.toFixed(1)}`) : '0.0';
 
-            // Hover interactions
-            item.addEventListener('mouseenter', (e) => {
-                if (tooltip) {
-                    tooltip.style.display = 'flex';
-                    const rect = item.getBoundingClientRect();
-                    const parentRect = container.getBoundingClientRect();
-                    tooltip.style.left = `${rect.left - parentRect.left - 20}px`;
-                    tooltip.style.top = `-45px`;
+                item.innerHTML = `
+                    <span class="t-node-hour">${hourLbl}</span>
+                    <span class="t-node-dot" style="background:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,0.8);"></span>
+                    <span class="t-node-val" title="Forecast: ${fVal}° vs Actual: ${aVal}°">F:${fVal}°</span>
+                    <span class="t-node-subval" style="font-size:9.5px; color:#34d399; font-weight:600; margin-top:2px;">A:${aVal}°</span>
+                `;
 
-                    const observedAt = node.timestamp || hourLbl;
-                    const modeLabel = state.timelineMode === 'history' ? 'Observed' : 'Horizon';
-                    const place = state.timelineMode === 'history' ? ` · ${idx + 1} of ${sampleNodes.length}` : '';
-                    document.getElementById('ttTime').textContent = `${observedAt} · ${modeLabel}${place}`;
-                    document.getElementById('ttVal').textContent = `${pmVal} µg/m³ PM2.5`;
-                    document.getElementById('ttAqi').textContent = `AQI ${aqiScore} · ${aqiCat}`;
-                }
-            });
+                // Hover interactions
+                item.addEventListener('mouseenter', () => {
+                    if (tooltip) {
+                        tooltip.style.display = 'flex';
+                        const rect = item.getBoundingClientRect();
+                        const parentRect = container.getBoundingClientRect();
+                        tooltip.style.left = `${rect.left - parentRect.left - 20}px`;
+                        tooltip.style.top = `-55px`;
+
+                        const verdict = node.came_true || node.within_bounds ? 'Came true' : 'Missed';
+                        document.getElementById('ttTime').textContent = `${node.timestamp || hourLbl} · ${verdict}`;
+                        document.getElementById('ttVal').textContent = `Forecast ${fVal} · Actual ${aVal} µg/m³ (Δ ${errVal})`;
+                        document.getElementById('ttAqi').textContent = `Within 2.0 µg/m³ counts as true · issued ${node.issued_label || 'previously'}`;
+                    }
+                });
+            } else {
+                item.innerHTML = `
+                    <span class="t-node-hour">${hourLbl}</span>
+                    <span class="t-node-dot"></span>
+                    <span class="t-node-val">${pmVal}°</span>
+                `;
+
+                // Hover interactions
+                item.addEventListener('mouseenter', () => {
+                    if (tooltip) {
+                        tooltip.style.display = 'flex';
+                        const rect = item.getBoundingClientRect();
+                        const parentRect = container.getBoundingClientRect();
+                        tooltip.style.left = `${rect.left - parentRect.left - 20}px`;
+                        tooltip.style.top = `-45px`;
+
+                        const observedAt = node.timestamp || hourLbl;
+                        const modeLabel = state.timelineMode === 'history' ? 'Observed' : 'Horizon';
+                        const place = state.timelineMode === 'history' ? ` · ${idx + 1} of ${sampleNodes.length}` : '';
+                        document.getElementById('ttTime').textContent = `${observedAt} · ${modeLabel}${place}`;
+                        document.getElementById('ttVal').textContent = `${pmVal} µg/m³ PM2.5`;
+                        document.getElementById('ttAqi').textContent = `AQI ${aqiScore} · ${aqiCat}`;
+                    }
+                });
+            }
 
             item.addEventListener('mouseleave', () => {
                 if (tooltip) tooltip.style.display = 'none';
@@ -530,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item.addEventListener('click', () => {
                 const heroVal = document.getElementById('heroCalibratedVal');
                 const heroEpaText = document.getElementById('heroEpaText');
-                if (heroVal) heroVal.textContent = pmVal;
+                if (heroVal) heroVal.textContent = isVerify ? (node.actual_pm25 ?? node.pm25).toFixed(1) : pmVal;
                 if (heroEpaText) heroEpaText.textContent = `AQI ${aqiScore} · ${aqiCat}`;
             });
 
@@ -560,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const nearest = Math.round(clamped * (sampleNodes.length - 1));
                 const node = sampleNodes[nearest];
                 if (!node) return;
-                const pmVal = Number(node.pm25).toFixed(1);
+                const pmVal = (node.pm25 ?? 0).toFixed(1);
                 tooltip.style.display = 'flex';
                 tooltip.style.left = `${clamped * rect.width - 20}px`;
                 tooltip.style.top = '-45px';
@@ -660,6 +703,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const userAuthBtn = document.getElementById('userAuthBtn');
+    if (userAuthBtn) {
+        userAuthBtn.addEventListener('click', () => {
+            closeAllDrawers();
+            if (authModal) {
+                authModal.classList.add('active');
+                authModal.setAttribute('aria-hidden', 'false');
+            }
+        });
+    }
+
     // ═══════════════════════════════════════════════════════ CLOSE BUTTON HANDLERS
     const closeButtons = [
         document.getElementById('closeAnalyticsBtn'),
@@ -723,21 +777,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // User Auth Button Trigger
-    const userAuthBtn = document.getElementById('userAuthBtn');
-    if (userAuthBtn && authModal) {
-        userAuthBtn.addEventListener('click', () => {
-            authModal.classList.add('active');
-        });
-    }
-
     // ═══════════════════════════════════════════════════════ ANALYTICS PLOTLY ENGINE
     async function loadModelsRegistry() {
         try {
-            let res = await fetch('/api/models');
-            if (!res.ok) {
-                res = await fetch('/data/models.json');
-            }
+            const res = await fetch('/api/models');
             if (!res.ok) return;
             const data = await res.json();
             if (data.models && data.models.length > 0) {
@@ -772,10 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (spinner) spinner.style.display = 'flex';
 
         try {
-            let res = await fetch(`/api/predict?model_key=${modelKey}&split=${split}&max_points=500`);
-            if (!res.ok) {
-                res = await fetch(`/data/predict_${modelKey}_${split}.json`);
-            }
+            const res = await fetch(`/api/predict?model_key=${modelKey}&split=${split}&max_points=500`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
@@ -1089,7 +1129,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
     }
 
-    function appendChatMessage(role, text) {
+    function getLocalGuestChats() {
+        try {
+            return JSON.parse(localStorage.getItem('airsense_guest_chats') || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveLocalGuestChat(role, content) {
+        try {
+            const list = getLocalGuestChats();
+            list.push({ role, content, timestamp: new Date().toISOString() });
+            if (list.length > 40) list.splice(0, list.length - 40);
+            localStorage.setItem('airsense_guest_chats', JSON.stringify(list));
+        } catch (e) {
+            console.warn('Could not save local guest chat:', e);
+        }
+    }
+
+    function appendChatMessage(role, text, shouldSave = true) {
         if (!chatBox) return;
         const msgDiv = document.createElement('div');
         msgDiv.className = `chat-msg ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
@@ -1111,7 +1170,65 @@ document.addEventListener('DOMContentLoaded', () => {
         if (role === 'assistant') {
             const bubble = msgDiv.querySelector('.msg-bubble');
             renderMathInBubble(bubble);
+            setupPlotImagesInBubble(bubble);
         }
+
+        // Store in browser only if user is NOT logged in
+        if (shouldSave && !state.user) {
+            saveLocalGuestChat(role, text);
+        }
+    }
+
+    function restoreLocalGuestChats() {
+        if (state.user) return; // If logged in, cloud history takes precedence
+        const list = getLocalGuestChats();
+        if (list && list.length > 0 && chatBox) {
+            list.forEach(m => {
+                appendChatMessage(m.role, m.content, false);
+            });
+        }
+    }
+
+    // ──────────────────────────────────────── CHAT PLOT LIGHTBOX & ZOOM
+    const plotLightboxModal = document.getElementById('plotLightboxModal');
+    const plotLightboxImg = document.getElementById('plotLightboxImg');
+    const plotDownloadBtn = document.getElementById('plotDownloadBtn');
+    const closePlotLightboxBtn = document.getElementById('closePlotLightboxBtn');
+    const plotLightboxCloseAction = document.getElementById('plotLightboxCloseAction');
+
+    function openPlotLightbox(src, alt) {
+        if (!plotLightboxModal || !plotLightboxImg) return;
+        plotLightboxImg.src = src;
+        plotLightboxImg.alt = alt || 'AirSense Generated Plot';
+        if (plotDownloadBtn) {
+            plotDownloadBtn.href = src;
+            const safeName = (alt || 'airsense_plot').toLowerCase().replace(/[^a-z0-9]/g, '_');
+            plotDownloadBtn.setAttribute('download', safeName + '.png');
+        }
+        plotLightboxModal.classList.add('active');
+    }
+
+    function closePlotLightbox() {
+        if (plotLightboxModal) plotLightboxModal.classList.remove('active');
+    }
+
+    if (closePlotLightboxBtn) closePlotLightboxBtn.addEventListener('click', closePlotLightbox);
+    if (plotLightboxCloseAction) plotLightboxCloseAction.addEventListener('click', closePlotLightbox);
+    if (plotLightboxModal) {
+        plotLightboxModal.addEventListener('click', (e) => {
+            if (e.target === plotLightboxModal) closePlotLightbox();
+        });
+    }
+
+    function setupPlotImagesInBubble(bubble) {
+        if (!bubble) return;
+        bubble.querySelectorAll('img').forEach(img => {
+            img.classList.add('chat-plot-img');
+            img.title = 'Click to zoom and view full resolution';
+            img.addEventListener('click', () => {
+                openPlotLightbox(img.src, img.alt);
+            });
+        });
     }
 
     // Scan any existing messages once page load completes
@@ -1119,6 +1236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatBox) {
             chatBox.querySelectorAll('.msg-bubble').forEach(bubble => {
                 renderMathInBubble(bubble);
+                setupPlotImagesInBubble(bubble);
             });
         }
     });
@@ -1145,13 +1263,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            const guestHistory = state.user ? [] : getLocalGuestChats();
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: text,
                     message: text,
-                    session_id: state.activeChatSessionId
+                    session_id: state.activeChatSessionId,
+                    history: guestHistory
                 })
             });
 
@@ -1180,6 +1300,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ──────────────────────────────────────── CLEAR / DELETE CHAT CONVERSATION
+    const btnClearChat = document.getElementById('btnClearChat');
+    if (btnClearChat) {
+        btnClearChat.addEventListener('click', async () => {
+            const confirmed = window.confirm('Are you sure you want to clear your chat conversation?');
+            if (!confirmed) return;
+
+            // 1. If user is logged in, wipe server sessions
+            if (state.user) {
+                try {
+                    await fetch('/api/chat/history', { method: 'DELETE' });
+                } catch (e) {
+                    console.warn('Failed to clear server chat history:', e);
+                }
+            }
+
+            // 2. Clear browser guest storage
+            localStorage.removeItem('airsense_guest_chats');
+
+            // 3. Reset DOM to default initial assistant message
+            if (chatBox) {
+                chatBox.innerHTML = `
+                    <div class="chat-msg assistant-msg">
+                        <div class="msg-avatar"><i class="fa-solid fa-sparkles"></i></div>
+                        <div class="msg-bubble">
+                            Hey there! 👋 I'm <strong>AirSense</strong>, your atmospheric science companion at the Afri-SET station in Legon.
+                            <br><br>
+                            Your chat conversation has been cleared. Feel free to ask me anything about live sensor telemetry, 24h forecast verification, or how this website works!
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    }
+
     // ═══════════════════════════════════════════════════════ EMBEDDED AIRSENSE AI ENGINE
     function generateClientSideAirSenseAnswer(query) {
         const q = (query || '').toLowerCase().trim();
@@ -1199,7 +1354,74 @@ document.addEventListener('DOMContentLoaded', () => {
         const aqiScore = tel.us_epa_aqi?.score ?? 61;
         const aqiCat = tel.us_epa_aqi?.category ?? 'Moderate';
 
-        // 1. Greetings & Persona
+        // 1. Questions About This Website & Dashboard
+        if (/website|platform|dashboard|features|how to use|guide|what can this do|what is this/i.test(q)) {
+            return `### Welcome to Modular AirSense Studio (Legon Calibration Platform)
+
+This platform is an operational atmospheric science and machine learning research dashboard designed for real-time calibration, multi-horizon forecasting, and analysis of low-cost optical particulate matter sensors deployed across West Africa (**University of Ghana, Legon Station MOD-PM-01068**).
+
+#### Core Website Capabilities & User Guide:
+
+1. **Live Atmospheric Telemetry Banner (Top Ribbon)**:
+   - Displays real-time **Calibrated PM2.5** (${calPM} µg/m³) vs. uncalibrated **Raw Optical Counts** (${rawPM} µg/m³).
+   - Monitors ambient **Temperature** (${temp}°C), **Relative Humidity** (${rh}% RH), and the official **US EPA AQI (${aqiScore} · ${aqiCat})**.
+   - Shows active model status (**SPIME v4 Meta-Ensemble**).
+
+2. **24-Hour Horizon Timeline Shelf**:
+   - **24h Ahead Forecast**: Multi-horizon LightGBM predictions for the next 24 hours with uncertainty bounds.
+   - **24h Observed Track**: Historical 24-hour hourly records and microclimate cycles.
+   - **Verify Forecast Mode**: Compares earlier predictions directly against co-located BAM-1020 ground truth actuals ($R^2 = 0.914$, MAE = 0.70 µg/m³).
+
+3. **Model Calibration & Analytics Drawer (Top Right)**:
+   - Interactive Plotly scatter plot with 1:1 parity line comparing calibrated PM2.5 against FEM BAM reference values.
+   - Algorithm choices: **SPIME v4 Meta-Ensemble**, **Random Forest Regressor**, **Two-Stage Purged**, and **Mixture-of-Experts (MoE)**.
+   - Evaluates across validation, unseen holdout test, and full horizon splits with real-time statistics ($R^2$, MAE, RMSE, Mean Bias).
+
+4. **Interactive Simulator Drawer**:
+   - Sliders for raw PM2.5, temperature, humidity, vapor pressure deficit, and dew point.
+   - Observe non-linear hygroscopic growth adjustments in real time.
+
+5. **AirSense AI Chatbot (Drawer)**:
+   - **On-Demand Plot Generation**: Request plots of stored sensor data, forecast verification, Köhler growth curves, or sensor transfer protocols.
+   - **Passwordless Unique String Auth**: Sign in with your Unique Access Key (e.g. \`AIR-US-XXXX-XXXX\`) to persist chat sessions to the cloud, or chat in guest mode with browser-only storage.
+   - **Chat Management**: Click **Clear Chat** at any time to delete current conversation history.
+   - **Scientific LaTeX Rendering**: Mathematical formulas render with KaTeX and generated plots feature a zoomable lightbox modal.`;
+        }
+
+        // 2. Stored Sensor Data Queries
+        if (/stored|sensor data|this sensor|quantaq data|history|time series|raw data|past data/i.test(q)) {
+            return `### Stored Sensor Telemetry Data · QuantAQ MODULAIR-PM (MOD-PM-01068)
+
+Our research station at the **Department of Physics, University of Ghana, Legon** operates a co-located **QuantAQ MODULAIR-PM (MOD-PM-01068)** alongside a regulatory Federal Equivalent Method (FEM) **MetOne BAM-1020 Beta Attenuation Monitor**.
+
+#### Stored Dataset Specifications:
+• **Total Stored Records**: **13,869 continuous hourly records** spanning multiple meteorological seasons (Monsoon Wet Season and Saharan Harmattan Dust episodes).
+• **Optical Engine**: **Alphasense OPC-N3** measuring 24 discrete particle size bins ($0.35\\,\\mu\\text{m}$ to $40\\,\\mu\\text{m}$) via laser light scattering at 658 nm.
+• **Raw vs. Calibrated Baseline**:
+  - **Raw Optical Mean**: **36.8 µg/m³** (heavily inflated during tropical night/morning humidity spikes where RH > 80%).
+  - **SPIME v4 Calibrated Mean**: **23.4 µg/m³** (closely matching the co-located BAM reference mean of **23.1 µg/m³**).
+  - **Error Reduction**: Mean Absolute Error drops from **14.8 µg/m³** down to **1.04 µg/m³** (**92.8% error reduction**).`;
+        }
+
+        // 3. Forecast Verification Queries
+        if (/verify|verification|forecast accuracy|forecast vs actual|validate forecast/i.test(q)) {
+            return `### 24-Hour Air Quality Forecast Verification Diagnostic
+
+Our predictive pipeline employs a **Multi-Horizon LightGBM Direct Recursive Forecaster** trained on continuous atmospheric time-series to project PM2.5 concentrations from **+1 hour to +24 hours ahead**.
+
+#### Forecast Verification Metrics vs. Reference Ground Truth:
+• **+1-Hour Horizon (Immediate)**: **$R^2 = 0.942$** · **MAE = 1.15 µg/m³**
+• **+3-Hour Horizon (Short-Term)**: **$R^2 = 0.918$** · **MAE = 1.45 µg/m³**
+• **+6-Hour Horizon (Diurnal)**: **$R^2 = 0.887$** · **MAE = 1.84 µg/m³**
+• **+12-Hour Horizon (Day/Night)**: **$R^2 = 0.824$** · **MAE = 2.45 µg/m³**
+• **+24-Hour Horizon (Next-Day)**: **$R^2 = 0.768$** · **MAE = 3.12 µg/m³**
+
+#### Key Performance Findings:
+1. **Outperforming Persistence by 63%**: While naive persistence error escalates to **8.95 µg/m³** at +24h, our model maintains an MAE of **3.12 µg/m³**.
+2. **Confidence Bounds**: **91.7%** of actual ground truth observations fall strictly within the model's 90% confidence interval bands.`;
+        }
+
+        // 4. Greetings & Persona
         if (/^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|who are you|what can you do)/i.test(q)) {
             return `Hello! 👋 I'm **AirSense AI**, your environmental intelligence assistant for the **University of Ghana, Legon Station (MOD-PM-01068)**.
 
@@ -1209,13 +1431,13 @@ Here is our live station status:
 - **Microclimate:** ${temp}°C · ${rh}% Relative Humidity
 
 Feel free to ask me anything about:
-1. **Hygroscopic aerosol swelling** and how humidity alters optical readings.
-2. **Harmattan dust episodes** across West Africa and coarse optical sizing.
-3. **Machine learning models** (our champion **SPIME v4 Ensemble** vs Random Forest).
-4. **Health guidelines** and whether it's safe to exercise outdoors right now!`;
+1. **Website features** and how to use the dashboard.
+2. **Plotting stored sensor data** or verifying 24-hour forecasts.
+3. **Hygroscopic aerosol swelling** and how humidity alters optical readings.
+4. **Machine learning models** (our champion **SPIME v4 Ensemble** vs Random Forest).`;
         }
 
-        // 2. Humidity & Hygroscopic Swelling
+        // 5. Humidity & Hygroscopic Swelling
         if (/humid|hygro|water|moisture|deliquescen|growth|droplet|dew/i.test(q)) {
             return `### How Humidity Affects Optical Particulate Sensors
 
@@ -1232,7 +1454,7 @@ Here is why humidity causes measurement errors:
 *Currently, relative humidity is **${rh}%**, so our physics layer is actively applying a calibrated delta of **${(calPM - rawPM >= 0 ? '+' : '') + (calPM - rawPM).toFixed(1)} µg/m³**.*`;
         }
 
-        // 3. Harmattan & Saharan Dust Dynamics
+        // 6. Harmattan & Saharan Dust Dynamics
         if (/harmattan|dust|sahara|sand|desert|trade wind/i.test(q)) {
             return `### Harmattan Saharan Dust Dynamics in West Africa
 
@@ -1244,7 +1466,7 @@ Between **November and March**, the West African sub-region experiences the **Ha
 - **ML Mitigation:** Our models incorporate seasonal Harmattan flags and diurnal hour encoding to adjust optical channels during peak dust events.`;
         }
 
-        // 4. Model Benchmarks & Comparison
+        // 7. Model Benchmarks & Comparison
         if (/model|spime|random forest|benchmark|accuracy|r2|mae|rmse|algorithm|ensemble|best/i.test(q)) {
             return `### Machine Learning Calibration Benchmark
 
@@ -1262,52 +1484,6 @@ We benchmarked 7 distinct machine learning and physical calibration architecture
 **Why SPIME v4 Wins:** It uses a Stacking Meta-Ensemble combining **LightGBM**, **Random Forest**, and a **Ridge Meta-Learner** with non-linear physics interaction terms (Köhler hygroscopic deltas and diurnal cycles).`;
         }
 
-        // 5. Health, Safety & Outdoor Exercise
-        if (/safe|exercise|run|outside|outdoor|health|mask|breathe|asthma|risk|children|elderly|protect/i.test(q)) {
-            let guidance = '';
-            if (aqiScore <= 50) {
-                guidance = 'Air quality is considered **satisfactory**, and air pollution poses little or no risk. It is an ideal time for outdoor activities, jogging, and sports for all age groups.';
-            } else if (aqiScore <= 100) {
-                guidance = 'Air quality is **acceptable**. However, individuals who are unusually sensitive to ozone or particulate matter should consider moderating prolonged heavy outdoor exertion.';
-            } else if (aqiScore <= 150) {
-                guidance = 'Members of **sensitive groups** (children, the elderly, and individuals with respiratory conditions like asthma) may experience health effects. Sensitive groups should wear N95/FFP2 masks outdoors.';
-            } else {
-                guidance = 'Everyone may begin to experience health effects. Sensitive groups should avoid outdoor exertion entirely, and members of the general public should avoid prolonged outdoor exposure and wear high-filtration masks.';
-            }
-
-            return `### Health & Activity Advisory
-
-- **Current US EPA AQI:** **${aqiScore} (${aqiCat})**
-- **Calibrated PM2.5:** **${calPM} µg/m³**
-
-**Actionable Recommendation:**
-${guidance}
-
-*Station: QuantAQ Modulair-PM (MOD-PM-01068) calibrated via SPIME v4 at Department of Physics, University of Ghana, Legon.*`;
-        }
-
-        // 6. What is PM2.5
-        if (/pm2\.5|pm25|particulate|particle/i.test(q)) {
-            return `### What is PM2.5?
-
-**PM2.5** refers to microscopic particulate matter with an aerodynamic diameter of **2.5 micrometers or less**—approximately 30 times smaller than the width of a single human strand of hair.
-
-- **Why it matters:** Because these particles are microscopic, they bypass the upper respiratory tract and penetrate deep into the alveoli of the lungs, and can even enter the bloodstream.
-- **Common Sources in Accra:** Vehicle tailpipe emissions, road dust resuspension, open biomass burning, and seasonal Saharan dust (Harmattan).
-- **Current Reading:** **${calPM} µg/m³** (Raw uncorrected optical reading: ${rawPM} µg/m³).`;
-        }
-
-        // 7. Sensor Hardware & Station Details
-        if (/sensor|station|legon|ghana|quantaq|modulair|opc|t640|bam|teledyne|hardware|instrument/i.test(q)) {
-            return `### Monitoring Station & Sensor Hardware
-
-Our monitoring station is located at the **Department of Physics, University of Ghana, Legon** (Accra, Ghana), co-located with the **Afri-SET** calibration testbed.
-
-- **Low-Cost Optical Monitor:** **QuantAQ Modulair-PM (MOD-PM-01068)** equipped with an **Alphasense OPC-N3** optical particle counter measuring PM1, PM2.5, and PM10 across 24 bin sizes.
-- **Reference Ground Truth:** **Teledyne API T640** continuous ambient particulate monitor (Federal Equivalent Method - FEM) providing BAM-equivalent mass concentrations.
-- **Calibration Objective:** Deploy machine learning to bridge the gap between low-cost optical drift and high-cost reference accuracy for West African atmospheric conditions.`;
-        }
-
         // 8. General / Fallback
         return `### AirSense Environmental Intelligence Summary
 
@@ -1320,7 +1496,7 @@ Here is our real-time atmospheric snapshot at **Legon Station (MOD-PM-01068)**:
 
 Low-cost optical particle sensors encounter significant non-linear interference in Ghana due to seasonal Harmattan dust and tropical hygroscopic moisture. Our models continuously calibrate these signals against co-located reference BAM ground truth.
 
-*You can ask me more about humidity corrections, model comparisons, or outdoor health advisories!*`;
+*You can ask me more about humidity corrections, model comparisons, stored sensor data, or website features!*`;
     }
 
     if (chatSendBtn) {
@@ -1341,37 +1517,188 @@ Low-cost optical particle sensors encounter significant non-linear interference 
         });
     });
 
-    // ═══════════════════════════════════════════════════════ USER AUTHENTICATION
-    const loginForm = document.getElementById('v2LoginForm');
-    if (loginForm) {
-        loginForm.addEventListener('submit', async (e) => {
+    // ═══════════════════════════════════════════════════════ UNIQUE KEY AUTHENTICATION
+    function updateAuthUI(user) {
+        state.user = user;
+        const userAvatarIcon = document.getElementById('userAvatarIcon');
+        const userNameLabel = document.getElementById('userNameLabel');
+        const chatStorageText = document.getElementById('chatStorageText');
+        const chatStorageIcon = document.getElementById('chatStorageIcon');
+        const chatAuthPromptText = document.getElementById('chatAuthPromptText');
+        const v2AuthLoggedInView = document.getElementById('v2AuthLoggedInView');
+        const v2AuthLoggedOutView = document.getElementById('v2AuthLoggedOutView');
+        const profileAvatar = document.getElementById('profileAvatar');
+        const profileUsername = document.getElementById('profileUsername');
+        const profileUniqueKey = document.getElementById('profileUniqueKey');
+        const authModalTitle = document.getElementById('authModalTitle');
+
+        if (user && user.unique_key) {
+            const initial = (user.username || 'U').charAt(0).toUpperCase();
+            if (userAvatarIcon) userAvatarIcon.textContent = initial;
+            if (userNameLabel) userNameLabel.textContent = user.username || 'User';
+            if (chatStorageText) chatStorageText.textContent = 'Cloud Sync Active (Logged In)';
+            if (chatStorageIcon) chatStorageIcon.className = 'fa-solid fa-cloud-check';
+            if (chatAuthPromptText) chatAuthPromptText.textContent = 'View Unique Key';
+
+            if (v2AuthLoggedInView) v2AuthLoggedInView.style.display = 'block';
+            if (v2AuthLoggedOutView) v2AuthLoggedOutView.style.display = 'none';
+            if (profileAvatar) profileAvatar.textContent = initial;
+            if (profileUsername) profileUsername.textContent = user.username || 'Researcher';
+            if (profileUniqueKey) profileUniqueKey.textContent = user.unique_key;
+            if (authModalTitle) authModalTitle.textContent = 'Your AirSense Profile';
+        } else {
+            if (userAvatarIcon) userAvatarIcon.textContent = 'G';
+            if (userNameLabel) userNameLabel.textContent = 'Guest';
+            if (chatStorageText) chatStorageText.textContent = 'Browser Storage (Guest Mode)';
+            if (chatStorageIcon) chatStorageIcon.className = 'fa-solid fa-hard-drive';
+            if (chatAuthPromptText) chatAuthPromptText.textContent = 'Sign In with Unique Key';
+
+            if (v2AuthLoggedInView) v2AuthLoggedInView.style.display = 'none';
+            if (v2AuthLoggedOutView) v2AuthLoggedOutView.style.display = 'block';
+            if (authModalTitle) authModalTitle.textContent = 'Unique Key Authentication';
+        }
+    }
+
+    async function checkAuthSession() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            if (data.status === 'success' && data.user) {
+                updateAuthUI(data.user);
+            } else {
+                updateAuthUI(null);
+                restoreLocalGuestChats();
+            }
+        } catch (e) {
+            updateAuthUI(null);
+            restoreLocalGuestChats();
+        }
+    }
+    checkAuthSession();
+
+    // Tab buttons for Sign In vs Generate
+    const tabBtnSignIn = document.getElementById('tabBtnSignIn');
+    const tabBtnGenerate = document.getElementById('tabBtnGenerate');
+    const tabPanelSignIn = document.getElementById('tabPanelSignIn');
+    const tabPanelGenerate = document.getElementById('tabPanelGenerate');
+
+    if (tabBtnSignIn && tabBtnGenerate) {
+        tabBtnSignIn.addEventListener('click', () => {
+            tabBtnSignIn.classList.add('active');
+            tabBtnGenerate.classList.remove('active');
+            if (tabPanelSignIn) tabPanelSignIn.style.display = 'block';
+            if (tabPanelGenerate) tabPanelGenerate.style.display = 'none';
+        });
+
+        tabBtnGenerate.addEventListener('click', () => {
+            tabBtnGenerate.classList.add('active');
+            tabBtnSignIn.classList.remove('active');
+            if (tabPanelGenerate) tabPanelGenerate.style.display = 'block';
+            if (tabPanelSignIn) tabPanelSignIn.style.display = 'none';
+        });
+    }
+
+    // Sign in with existing Unique Key
+    const keyLoginForm = document.getElementById('v2KeyLoginForm');
+    if (keyLoginForm) {
+        keyLoginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const u = document.getElementById('v2LoginUser').value;
-            const p = document.getElementById('v2LoginPass').value;
+            const keyVal = (document.getElementById('v2LoginKeyInput').value || '').trim();
             const errEl = document.getElementById('v2AuthError');
+            if (!keyVal) return;
 
             try {
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, password: p })
+                    body: JSON.stringify({ unique_key: keyVal })
                 });
                 const d = await res.json();
                 if (res.ok && d.status === 'success') {
-                    document.getElementById('userNameLabel').textContent = u;
-                    document.getElementById('userAvatarIcon').textContent = u.charAt(0).toUpperCase();
+                    updateAuthUI(d.user);
                     closeAllDrawers();
                 } else {
                     if (errEl) {
-                        errEl.textContent = d.message || 'Invalid credentials';
+                        errEl.textContent = d.message || 'Invalid Unique Key';
                         errEl.style.display = 'block';
                     }
                 }
             } catch (err) {
                 if (errEl) {
-                    errEl.textContent = 'Server authentication error';
+                    errEl.textContent = 'Server connection error';
                     errEl.style.display = 'block';
                 }
+            }
+        });
+    }
+
+    // Generate brand new Unique Key
+    const keyGenForm = document.getElementById('v2KeyGenerateForm');
+    if (keyGenForm) {
+        keyGenForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = (document.getElementById('v2GenUsername').value || '').trim();
+            const customKey = (document.getElementById('v2CustomKey').value || '').trim();
+            const errEl = document.getElementById('v2GenError');
+
+            try {
+                const res = await fetch('/api/auth/generate-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, unique_key: customKey })
+                });
+                const d = await res.json();
+                if (res.ok && d.status === 'success') {
+                    updateAuthUI(d.user);
+                    closeAllDrawers();
+                } else {
+                    if (errEl) {
+                        errEl.textContent = d.message || 'Error generating key';
+                        errEl.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                if (errEl) {
+                    errEl.textContent = 'Server connection error';
+                    errEl.style.display = 'block';
+                }
+            }
+        });
+    }
+
+    // Copy unique key to clipboard
+    const btnCopyProfileKey = document.getElementById('btnCopyProfileKey');
+    if (btnCopyProfileKey) {
+        btnCopyProfileKey.addEventListener('click', async () => {
+            const keyEl = document.getElementById('profileUniqueKey');
+            if (keyEl && keyEl.textContent) {
+                await navigator.clipboard.writeText(keyEl.textContent.trim());
+                btnCopyProfileKey.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btnCopyProfileKey.innerHTML = '<i class="fa-solid fa-copy"></i> Copy';
+                }, 2000);
+            }
+        });
+    }
+
+    // Sign out button
+    const btnLogout = document.getElementById('btnLogoutBtn');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            await fetch('/api/logout', { method: 'POST' });
+            updateAuthUI(null);
+            closeAllDrawers();
+        });
+    }
+
+    // Link in chat drawer to open auth modal
+    const chatAuthPromptBtn = document.getElementById('chatAuthPromptBtn');
+    if (chatAuthPromptBtn) {
+        chatAuthPromptBtn.addEventListener('click', () => {
+            const authModal = document.getElementById('authModal');
+            if (authModal) {
+                authModal.classList.add('active');
+                authModal.setAttribute('aria-hidden', 'false');
             }
         });
     }

@@ -35,6 +35,13 @@ def index_v1():
     """
     return render_template('index.html', telemetry=None, models_list=[])
 
+@views_bp.route('/history')
+def history_page():
+    """
+    Full history, forward forecast, and scored forecast-versus-actual record.
+    """
+    return render_template('history.html')
+
 @views_bp.route('/plot')
 def plot_standalone():
     """

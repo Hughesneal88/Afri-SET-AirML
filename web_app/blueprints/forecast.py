@@ -163,6 +163,141 @@ def build_observed_track_from_logs(logged_hours, telemetry):
     return track
 
 
+FORECAST_HIT_THRESHOLD = 2.0
+
+
+def _diurnal_pm(hour):
+    """Accra diurnal PM2.5 offset. `hour` may include a fractional minute."""
+    return (
+        4.2 * np.sin(2 * np.pi * (hour - 3) / 24.0)
+        + 1.8 * np.cos(4 * np.pi * (hour - 8) / 24.0)
+    )
+
+
+def _hour_fraction(ts):
+    stamp = pd.Timestamp(ts)
+    return stamp.hour + stamp.minute / 60.0 + stamp.second / 3600.0
+
+
+def score_recorded_forecasts(observed_track, threshold=FORECAST_HIT_THRESHOLD, max_lead_hours=3):
+    """
+    Score each recording against the forecast issued from the previous hour.
+
+    The forecast is that hour's mean PM2.5, shifted by the Accra diurnal cycle
+    to the reading's timestamp. Readings with no prior hour inside
+    `max_lead_hours` stay in the history but are not scored. MAE is the mean
+    absolute error. MBE is the mean of (forecast − actual): positive means the
+    forecast ran high. A forecast came true within `threshold` µg/m³.
+    """
+    points = []
+    if not observed_track:
+        return points, _verification_kpis(points, threshold)
+
+    hourly = {}
+    for row in observed_track:
+        stamp = pd.to_datetime(row["timestamp"], errors="coerce")
+        if pd.isna(stamp):
+            continue
+        hour = pd.Timestamp(stamp).floor("h")
+        slot = hourly.setdefault(hour, [])
+        slot.append(float(row["pm25"]))
+    hour_mean = {hour: float(np.mean(values)) for hour, values in hourly.items() if values}
+    hours_sorted = sorted(hour_mean)
+
+    for row in observed_track:
+        stamp = pd.to_datetime(row["timestamp"], errors="coerce")
+        if pd.isna(stamp):
+            continue
+        stamp = pd.Timestamp(stamp)
+        hour = stamp.floor("h")
+        prior = [
+            source for source in hours_sorted
+            if source < hour and (hour - source) <= pd.Timedelta(hours=max_lead_hours)
+        ]
+        if not prior:
+            continue
+        source = prior[-1]
+        forecast_pm = max(
+            1.0,
+            round(hour_mean[source] + (_diurnal_pm(_hour_fraction(stamp)) - _diurnal_pm(source.hour)), 2),
+        )
+        actual = float(row["pm25"])
+        error = round(forecast_pm - actual, 2)
+        abs_error = round(abs(error), 2)
+        came_true = bool(abs_error <= threshold)
+        forecast_aqi = calculate_us_epa_aqi(forecast_pm)
+        points.append({
+            "timestamp": stamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "hour_label": str(row.get("hour_label") or stamp.strftime("%H:%M:%S")),
+            "issued_at": source.strftime("%Y-%m-%d %H:%M:%S"),
+            "issued_label": source.strftime("%H:00"),
+            "actual_pm25": actual,
+            "forecast_pm25": float(forecast_pm),
+            "pm25": actual,
+            "error": float(error),
+            "abs_error": float(abs_error),
+            "came_true": came_true,
+            "within_bounds": came_true,
+            "lower_bound": round(max(0.0, forecast_pm - threshold), 2),
+            "upper_bound": round(forecast_pm + threshold, 2),
+            "actual_aqi": int(row.get("aqi_score") or 0),
+            "actual_category": str(row.get("aqi_category") or ""),
+            "actual_color": str(row.get("aqi_color") or "#34d399"),
+            "forecast_aqi": int(forecast_aqi["aqi_score"]),
+            "forecast_category": str(forecast_aqi["category"]),
+            "forecast_color": str(forecast_aqi["color"]),
+            "aqi_score": int(row.get("aqi_score") or forecast_aqi["aqi_score"]),
+            "aqi_category": str(row.get("aqi_category") or forecast_aqi["category"]),
+            "aqi_color": str(row.get("aqi_color") or forecast_aqi["color"]),
+        })
+    return points, _verification_kpis(points, threshold)
+
+
+def _verification_kpis(points, threshold):
+    if not points:
+        return {
+            "mae": None,
+            "mbe": None,
+            "r2": None,
+            "hit_threshold": threshold,
+            "hit_count": 0,
+            "scored_count": 0,
+            "hit_rate": None,
+            "status_summary": "No later reading is available to score a forecast yet.",
+        }
+
+    errors = np.array([point["error"] for point in points], dtype=float)
+    actuals = np.array([point["actual_pm25"] for point in points], dtype=float)
+    forecasts = np.array([point["forecast_pm25"] for point in points], dtype=float)
+    mae = float(np.mean(np.abs(errors)))
+    mbe = float(np.mean(errors))
+    ss_res = float(np.sum((actuals - forecasts) ** 2))
+    ss_tot = float(np.sum((actuals - np.mean(actuals)) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    hit_count = int(sum(1 for point in points if point["came_true"]))
+    scored = len(points)
+    hit_rate = 100.0 * hit_count / scored
+    sign = "+" if mbe >= 0 else ""
+    return {
+        "mae": round(mae, 2),
+        "mbe": round(mbe, 2),
+        "r2": round(r2, 3),
+        "hit_threshold": threshold,
+        "hit_count": hit_count,
+        "scored_count": scored,
+        "hit_rate": round(hit_rate, 1),
+        "lead_time_skill": (
+            "Each scored reading is checked against the forecast from the previous hour, "
+            "shifted by the Accra diurnal cycle. "
+            f"It came true when it landed within {threshold:.1f} µg/m³."
+        ),
+        "status_summary": (
+            f"MAE {mae:.2f} µg/m³ · MBE {sign}{mbe:.2f} µg/m³ · "
+            f"{hit_count} of {scored} forecasts came true"
+        ),
+    }
+
+
 def build_current_period_history(telemetry, now_h):
     """
     Builds a continuous 48-hour hourly sequence anchored strictly to the
@@ -426,50 +561,8 @@ def get_24h_forecast():
                 f"Favorable atmospheric dispersion expected. PM2.5 levels projected to remain within WHO guideline thresholds (< 15 µg/m³ 24h average)."
             )
 
-        # 5. Compute 24-Hour Forecast Verification Track & Performance KPIs
-        verification_points = []
-        ver_errs = []
-        ver_abs_errs = []
-        for i, obs in enumerate(observed_track):
-            act_pm = float(obs["pm25"])
-            # Prior forecast models the diurnal cycle and local emission patterns
-            hr_val = int(obs["hour_label"].split(':')[0])
-            model_noise = float(1.1 * np.sin(hr_val * 0.75) - 0.25 * np.cos(hr_val * 1.25))
-            f_pm = max(1.0, round(act_pm + model_noise, 2))
-            sigma_h = float(1.5 + 0.05 * i)
-            err = round(float(f_pm - act_pm), 2)
-            abs_err = round(abs(err), 2)
-            ver_errs.append(err)
-            ver_abs_errs.append(abs_err)
-            within_bounds = bool(abs_err <= (1.645 * sigma_h))
-            
-            f_aqi = calculate_us_epa_aqi(f_pm)
-            verification_points.append({
-                "timestamp": str(obs["timestamp"]),
-                "hour_label": str(obs["hour_label"]),
-                "actual_pm25": float(act_pm),
-                "forecast_pm25": float(f_pm),
-                "pm25": float(f_pm),
-                "error": float(err),
-                "abs_error": float(abs_err),
-                "lower_bound": float(round(max(0.0, f_pm - 1.645 * sigma_h), 2)),
-                "upper_bound": float(round(f_pm + 1.645 * sigma_h, 2)),
-                "within_bounds": bool(within_bounds),
-                "actual_aqi": int(obs["aqi_score"]),
-                "actual_category": str(obs["aqi_category"]),
-                "actual_color": str(obs["aqi_color"]),
-                "forecast_aqi": int(f_aqi["aqi_score"]),
-                "forecast_category": str(f_aqi["category"]),
-                "forecast_color": str(f_aqi["color"]),
-                "aqi_score": int(f_aqi["aqi_score"]),
-                "aqi_category": str(f_aqi["category"]),
-                "aqi_color": str(f_aqi["color"])
-            })
-            
-        ver_mae = float(np.mean(ver_abs_errs)) if ver_abs_errs else 1.18
-        ver_rmse = float(np.sqrt(np.mean([e**2 for e in ver_errs]))) if ver_errs else 1.52
-        ver_r2 = 0.914
-        ver_bounds_pct = float(np.mean([100.0 if p["within_bounds"] else 0.0 for p in verification_points])) if verification_points else 95.8
+        # 5. Score every forecast against the later recorded value.
+        verification_points, verification_kpis = score_recorded_forecasts(observed_track)
 
         return jsonify({
             "status": "success",
@@ -478,14 +571,7 @@ def get_24h_forecast():
             "forecast": forecast_points,
             "verification": {
                 "points": verification_points,
-                "kpis": {
-                    "r2": ver_r2,
-                    "mae": round(ver_mae, 2),
-                    "rmse": round(ver_rmse, 2),
-                    "within_bounds_pct": round(ver_bounds_pct, 1),
-                    "lead_time_skill": "Significant skill retained across all 24 horizons (Outperforms persistence by 63%)",
-                    "status_summary": f"Forecast Verification: R² = {ver_r2:.3f} · MAE = {ver_mae:.2f} µg/m³ ({ver_bounds_pct:.1f}% within 90% CI)"
-                }
+                "kpis": verification_kpis,
             },
             "kpis": {
                 "current_pm25": current_obs["pm25"],
@@ -527,19 +613,28 @@ def get_forecast_verification():
         f_resp = get_24h_forecast()
         data = f_resp.get_json() if hasattr(f_resp, 'get_json') else json.loads(f_resp.data)
         if data.get("status") == "success":
+            groups = {}
+            for point in (data.get("verification") or {}).get("points") or []:
+                issued = pd.to_datetime(point.get("issued_at"), errors="coerce")
+                target = pd.to_datetime(point.get("timestamp"), errors="coerce")
+                if pd.isna(issued) or pd.isna(target):
+                    continue
+                hours = int(round((target - issued).total_seconds() / 3600.0))
+                groups.setdefault(hours, []).append(float(point["error"]))
+            lead_times = []
+            for horizon in sorted(groups):
+                errs = np.array(groups[horizon], dtype=float)
+                lead_times.append({
+                    "horizon_hours": horizon,
+                    "count": int(len(errs)),
+                    "mae": round(float(np.mean(np.abs(errs))), 2),
+                    "mbe": round(float(np.mean(errs)), 2),
+                })
             return jsonify({
                 "status": "success",
                 "model_name": data.get("model_name"),
                 "verification": data.get("verification"),
-                "lead_times": [
-                    {"horizon": 1, "r2": 0.942, "mae": 1.15, "persistence_mae": 1.82},
-                    {"horizon": 2, "r2": 0.931, "mae": 1.28, "persistence_mae": 2.45},
-                    {"horizon": 3, "r2": 0.918, "mae": 1.45, "persistence_mae": 3.10},
-                    {"horizon": 6, "r2": 0.887, "mae": 1.84, "persistence_mae": 4.90},
-                    {"horizon": 12, "r2": 0.824, "mae": 2.45, "persistence_mae": 6.80},
-                    {"horizon": 18, "r2": 0.785, "mae": 2.82, "persistence_mae": 7.95},
-                    {"horizon": 24, "r2": 0.768, "mae": 3.12, "persistence_mae": 8.95}
-                ]
+                "lead_times": lead_times,
             })
         return jsonify({"status": "error", "message": "Failed to generate verification"}), 500
     except Exception as e:

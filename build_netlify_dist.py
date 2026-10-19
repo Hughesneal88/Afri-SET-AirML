@@ -32,6 +32,7 @@ def write_forecast_snapshot(data_dir):
         from web_app.blueprints.forecast import (
             load_recent_observed_hours,
             build_observed_track_from_logs,
+            score_recorded_forecasts,
         )
         from web_app.rag_engine import calculate_us_epa_aqi
 
@@ -87,11 +88,16 @@ def write_forecast_snapshot(data_dir):
             })
 
         peak = max(forecast, key=lambda point: point["pm25"])
+        verification_points, verification_kpis = score_recorded_forecasts(history)
         payload = {
             "status": "success",
             "model_name": "Observed Modulair-PM history",
             "history": history,
             "forecast": forecast,
+            "verification": {
+                "points": verification_points,
+                "kpis": verification_kpis,
+            },
             "kpis": {
                 "current_pm25": last["pm25"],
                 "current_aqi": last["aqi_score"],
@@ -105,7 +111,11 @@ def write_forecast_snapshot(data_dir):
         out_path = os.path.join(data_dir, "forecast.json")
         with open(out_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle)
-        print(f"    [+] Cached data/forecast.json ({len(history)} recordings, latest {last['hour_label']} = {last['pm25']} µg/m³)")
+        print(
+            f"    [+] Cached data/forecast.json ({len(history)} recordings, "
+            f"{verification_kpis.get('scored_count', 0)} scored, "
+            f"MAE {verification_kpis.get('mae')} · MBE {verification_kpis.get('mbe')})"
+        )
     except Exception as exc:
         print(f"    [-] Could not cache forecast history: {exc}")
 
@@ -163,6 +173,11 @@ def build():
         os.path.join(DIST_DIR, 'v2.css')
     )
     print("  [+] Copied dist/v2.css")
+
+    history_template = os.path.join(BASE_DIR, 'web_app', 'templates', 'history.html')
+    if os.path.exists(history_template):
+        shutil.copy2(history_template, os.path.join(DIST_DIR, 'history.html'))
+        print("  [+] Copied dist/history.html")
 
     # 4. Enhance and copy v2.js with fallback data routing
     v2_js_path = os.path.join(BASE_DIR, 'web_app', 'static', 'v2.js')
@@ -265,6 +280,7 @@ def build():
 /api/models     /data/models.json       200
 /api/live_telemetry /data/telemetry.json 200
 /api/forecast   /data/forecast.json     200
+/history        /history.html           200
 
 # Optional: If you deploy your Flask backend to Render/Railway, proxy all /api calls:
 # /api/*  https://YOUR-FLASK-APP.onrender.com/api/:splat  200
@@ -306,6 +322,11 @@ def build():
 [[redirects]]
   from = "/api/forecast"
   to = "/data/forecast.json"
+  status = 200
+
+[[redirects]]
+  from = "/history"
+  to = "/history.html"
   status = 200
 
 # Optional: If you connect a live Python backend on Render, Railway, or Fly.io:

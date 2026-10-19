@@ -32,6 +32,11 @@
   to = "/data/forecast.json"
   status = 200
 
+[[redirects]]
+  from = "/history"
+  to = "/history.html"
+  status = 200
+
 # Optional: If you connect a live Python backend on Render, Railway, or Fly.io:
 # [[redirects]]
 #   from = "/api/*"

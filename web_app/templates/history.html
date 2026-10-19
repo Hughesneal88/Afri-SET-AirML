@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSense · Full history and forecast score</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Plus Jakarta Sans", sans-serif;
+            color: #f8fafc;
+            background: radial-gradient(circle at 50% 0%, #18365c 0%, #0d2039 42%, #060e1a 100%);
+        }
+        a { color: inherit; }
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 28px 22px 64px;
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+        .eyebrow {
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #93c5fd;
+            font-weight: 700;
+        }
+        h1 { margin: 6px 0 8px; font-size: 32px; letter-spacing: -0.03em; }
+        .lede { margin: 0; max-width: 680px; color: #cbd5e1; line-height: 1.5; }
+        .back {
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,0.28);
+            background: rgba(255,255,255,0.1);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 700;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .scores {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 22px 0;
+        }
+        .card, .panel {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 18px;
+            backdrop-filter: blur(16px);
+        }
+        .card { padding: 16px 18px; }
+        .card span, .panel h2 { display: block; color: #94a3b8; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+        .card strong {
+            display: block;
+            margin-top: 8px;
+            font-family: "Azeret Mono", monospace;
+            font-size: 28px;
+        }
+        .card em { display: block; margin-top: 6px; font-style: normal; color: #cbd5e1; font-size: 12px; line-height: 1.4; }
+        .good { color: #34d399; }
+        .bad { color: #fb7185; }
+        .panel { padding: 16px; margin-bottom: 16px; }
+        .panel h2 { margin: 0 0 12px; }
+        #chart { width: 100%; height: 460px; }
+        .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .filters button {
+            border: 1px solid rgba(255,255,255,0.2);
+            background: transparent;
+            color: #e2e8f0;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .filters button.active { background: rgba(255,255,255,0.2); }
+        .table-wrap { max-height: 520px; overflow: auto; border-radius: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap; }
+        th { position: sticky; top: 0; background: #12263f; color: #94a3b8; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+        td.num { font-family: "Azeret Mono", monospace; }
+        .pill { border-radius: 999px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
+        .pill.true { background: rgba(52,211,153,0.18); color: #34d399; }
+        .pill.false { background: rgba(251,113,133,0.16); color: #fb7185; }
+        .status { color: #94a3b8; min-height: 1.2em; }
+        @media (max-width: 800px) {
+            .scores { grid-template-columns: 1fr 1fr; }
+            .top { flex-direction: column; align-items: flex-start; }
+            h1 { font-size: 26px; }
+            #chart { height: 340px; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <header class="top">
+            <div>
+                <div class="eyebrow">MOD-PM-01068 · Legon</div>
+                <h1>History and forecast score</h1>
+                <p class="lede">Every stored reading is on this page. A reading is scored when an earlier hour in the past three hours can forecast it. MAE is the average miss. MBE is forecast minus actual, so a positive MBE means the forecast ran high. The home shelf shows only the latest slice.</p>
+            </div>
+            <a class="back" href="/"><i class="fa-solid fa-arrow-left"></i> Back to studio</a>
+        </header>
+        <p class="status" id="status">Loading the full record…</p>
+        <section class="scores" id="scores" hidden>
+            <article class="card"><span>MAE</span><strong id="mae">—</strong><em>Mean absolute error, µg/m³</em></article>
+            <article class="card"><span>MBE</span><strong id="mbe">—</strong><em>Mean bias, forecast − actual</em></article>
+            <article class="card"><span>Came true</span><strong id="hits">—</strong><em id="hitNote">Within 2.0 µg/m³ of the later reading</em></article>
+            <article class="card"><span>Still ahead</span><strong id="ahead">—</strong><em>Forecast hours with no later reading yet</em></article>
+        </section>
+        <section class="panel">
+            <h2>Full series</h2>
+            <div id="chart"></div>
+        </section>
+        <section class="panel">
+            <h2>Each scored forecast</h2>
+            <div class="filters">
+                <button type="button" class="active" data-filter="all">All scored</button>
+                <button type="button" data-filter="true">Came true</button>
+                <button type="button" data-filter="false">Missed</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reading</th>
+                            <th>Forecast issued</th>
+                            <th>Actual</th>
+                            <th>Forecast</th>
+                            <th>Error</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    <script>
+        const state = { points: [], filter: "all" };
+
+        function signed(value) {
+            const number = Number(value);
+            const text = number.toFixed(2);
+            return number > 0 ? `+${text}` : text;
+        }
+
+        async function loadRecord() {
+            let response = await fetch("/api/forecast");
+            if (!response.ok) response = await fetch("/data/forecast.json");
+            if (!response.ok) throw new Error("History record is unavailable");
+            return response.json();
+        }
+
+        function renderScores(data) {
+            const kpis = data.verification?.kpis || {};
+            document.getElementById("scores").hidden = false;
+            document.getElementById("mae").textContent = kpis.mae == null ? "—" : Number(kpis.mae).toFixed(2);
+            const mbe = document.getElementById("mbe");
+            mbe.textContent = kpis.mbe == null ? "—" : signed(kpis.mbe);
+            mbe.className = Number(kpis.mbe) > 0.2 ? "bad" : Number(kpis.mbe) < -0.2 ? "good" : "";
+            const hits = kpis.hit_count || 0;
+            const scored = kpis.scored_count || 0;
+            document.getElementById("hits").textContent = scored ? `${kpis.hit_rate}%` : "—";
+            document.getElementById("hitNote").textContent = scored
+                ? `${hits} of ${scored} forecasts landed within ${kpis.hit_threshold} µg/m³`
+                : "No later reading is available yet";
+            document.getElementById("ahead").textContent = String((data.forecast || []).length);
+            document.getElementById("status").textContent = kpis.status_summary || "";
+        }
+
+        function renderChart(data) {
+            const history = data.history || [];
+            const scored = data.verification?.points || [];
+            const upcoming = data.forecast || [];
+            const layout = {
+                paper_bgcolor: "rgba(0,0,0,0)",
+                plot_bgcolor: "rgba(0,0,0,0)",
+                font: { family: "Plus Jakarta Sans, sans-serif", color: "#e2e8f0" },
+                margin: { t: 10, r: 16, b: 48, l: 52 },
+                legend: { orientation: "h", y: 1.12 },
+                xaxis: { gridcolor: "rgba(255,255,255,0.08)", title: "Time" },
+                yaxis: { gridcolor: "rgba(255,255,255,0.08)", title: "PM2.5 µg/m³" },
+                hovermode: "x unified"
+            };
+            Plotly.newPlot("chart", [
+                {
+                    name: "Actual",
+                    x: history.map((point) => point.timestamp),
+                    y: history.map((point) => point.pm25),
+                    type: "scatter",
+                    mode: "lines",
+                    line: { color: "#e2e8f0", width: 2 }
+                },
+                {
+                    name: "Forecast for that reading",
+                    x: scored.map((point) => point.timestamp),
+                    y: scored.map((point) => point.forecast_pm25),
+                    type: "scatter",
+                    mode: "lines",
+                    line: { color: "#fbbf24", width: 2 }
+                },
+                {
+                    name: "Still ahead",
+                    x: upcoming.map((point) => point.timestamp),
+                    y: upcoming.map((point) => point.pm25),
+                    type: "scatter",
+                    mode: "lines",
+                    line: { color: "#38bdf8", width: 2, dash: "dash" }
+                }
+            ], layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderRows() {
+            const body = document.getElementById("rows");
+            const points = state.points.filter((point) => {
+                if (state.filter === "true") return point.came_true;
+                if (state.filter === "false") return !point.came_true;
+                return true;
+            });
+            body.replaceChildren();
+            const fragment = document.createDocumentFragment();
+            points.forEach((point) => {
+                const row = document.createElement("tr");
+                const error = signed(point.error);
+                row.innerHTML = `
+                    <td>${point.timestamp}</td>
+                    <td>${point.issued_at || "—"}</td>
+                    <td class="num">${Number(point.actual_pm25).toFixed(2)}</td>
+                    <td class="num">${Number(point.forecast_pm25).toFixed(2)}</td>
+                    <td class="num">${error}</td>
+                    <td><span class="pill ${point.came_true ? "true" : "false"}">${point.came_true ? "Came true" : "Missed"}</span></td>
+                `;
+                fragment.appendChild(row);
+            });
+            body.appendChild(fragment);
+        }
+
+        document.querySelectorAll(".filters button").forEach((button) => {
+            button.addEventListener("click", () => {
+                document.querySelectorAll(".filters button").forEach((item) => item.classList.remove("active"));
+                button.classList.add("active");
+                state.filter = button.dataset.filter;
+                renderRows();
+            });
+        });
+
+        loadRecord().then((data) => {
+            state.points = data.verification?.points || [];
+            renderScores(data);
+            renderChart(data);
+            renderRows();
+        }).catch((error) => {
+            document.getElementById("status").textContent = error.message;
+        });
+    </script>
+</body>
+</html>

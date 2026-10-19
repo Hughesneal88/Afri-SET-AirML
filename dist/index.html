@@ -75,6 +75,10 @@
                     <i class="fa-solid fa-sparkles"></i>
                     <span>AI Chat</span>
                 </button>
+                <a class="nav-pill-btn" href="/history" title="Full history, forecasts, and whether they came true">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </a>
             </nav>
 
             <!-- Right Utility Controls -->
@@ -280,10 +284,11 @@
                     <span class="shelf-title-text" id="shelfTimelineTitle">24-Hour Predictive Horizon</span>
                 </div>
 
-                <!-- Forecast / History Mode Toggle -->
+                <!-- Forecast / History / Verify Mode Toggle -->
                 <div class="shelf-mode-pill">
-                    <button class="shelf-pill-btn active" id="btnModeForecast">Forecast (24h)</button>
-                    <button class="shelf-pill-btn" id="btnModeHistory">History (24h)</button>
+                    <button class="shelf-pill-btn active" id="btnModeForecast">Forecast</button>
+                    <button class="shelf-pill-btn" id="btnModeHistory">Latest</button>
+                    <button class="shelf-pill-btn" id="btnModeVerify">Came true</button>
                 </div>
 
                 <!-- Dynamic KPI Summary Badge -->
@@ -291,6 +296,7 @@
                     <span class="trend-icon" id="shelfTrendIcon"><i class="fa-solid fa-arrow-trend-up"></i></span>
                     <span id="shelfTrendText">Diurnal Peak: 17.7 µg/m³ at 07:00</span>
                 </div>
+                <a class="shelf-full-link" href="/history">Full history</a>
             </div>
 
             <!-- Continuous Spline Wave & Nodes Track -->
@@ -573,16 +579,37 @@
                     <p class="drawer-subtitle">RAG Conversational Intelligence & Atmospheric Analytics</p>
                 </div>
             </div>
-            <button class="drawer-close-btn" id="closeChatBtn" title="Close Chat"><i class="fa-solid fa-xmark"></i></button>
+            <div class="drawer-header-actions">
+                <button class="drawer-action-btn" id="btnClearChat" title="Clear / Delete Chat Conversation">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Clear Chat</span>
+                </button>
+                <button class="drawer-close-btn" id="closeChatBtn" title="Close Chat"><i class="fa-solid fa-xmark"></i></button>
+            </div>
         </div>
 
         <div class="chat-drawer-body">
+            <!-- Storage Mode Indicator Pill -->
+            <div class="chat-storage-pill-bar">
+                <span class="chat-storage-badge" id="chatStorageBadge">
+                    <i class="fa-solid fa-hard-drive" id="chatStorageIcon"></i>
+                    <span id="chatStorageText">Browser Storage (Guest Mode)</span>
+                </span>
+                <button class="chat-auth-link-btn" id="chatAuthPromptBtn">
+                    <i class="fa-solid fa-key"></i> <span id="chatAuthPromptText">Sign In with Unique Key</span>
+                </button>
+            </div>
+
             <!-- Quick Suggestion Prompt Chips -->
             <div class="chat-chips-scroll">
+                <button class="quick-chip" data-prompt="Can you plot the data stored from this sensor?">Plot Stored Sensor Data</button>
+                <button class="quick-chip" data-prompt="Can you verify the 24h forecasts and plot the verification against actual ground truth?">Verify 24h Forecasts</button>
+                <button class="quick-chip" data-prompt="How does this website work and what features does it have?">Website Guide</button>
+                <button class="quick-chip" data-prompt="How can SPIME be implemented on a PurpleAir PA-II sensor?">PurpleAir Implementation</button>
+                <button class="quick-chip" data-prompt="Plot the Köhler hygroscopic growth curve for me.">Plot Köhler Curve</button>
+                <button class="quick-chip" data-prompt="How do I port SPIME to Plantower PMS5003 or Sensirion SPS30?">Port to Plantower/Sensirion</button>
+                <button class="quick-chip" data-prompt="Explain the architecture of SPIME v4 Ensemble model.">Explain SPIME v4</button>
                 <button class="quick-chip" data-prompt="How does humidity affect the optical sensor readings right now?">Humidity Drift Impact</button>
-                <button class="quick-chip" data-prompt="What is the forecasted air quality peak for tomorrow?">Tomorrow's Peak Forecast</button>
-                <button class="quick-chip" data-prompt="Explain the architecture of SPIME v4 Ensemble model.">Explain SPIME v4 Ensemble</button>
-                <button class="quick-chip" data-prompt="What health precautions should sensitive groups take today?">Health Guidance</button>
             </div>
 
             <!-- Chat Stream Message Container -->
@@ -605,32 +632,102 @@
         </div>
     </aside>
 
-    <!-- ──────────────────────────────────────── USER AUTH MODAL -->
+    <!-- ──────────────────────────────────────── USER AUTH MODAL (UNIQUE STRING METHOD) -->
     <div class="glass-modal-overlay" id="authModal" aria-hidden="true">
         <div class="glass-modal-dialog auth-dialog">
             <div class="drawer-header">
                 <div class="drawer-title-group">
-                    <i class="fa-solid fa-user-shield drawer-icon"></i>
+                    <i class="fa-solid fa-key drawer-icon"></i>
                     <div>
-                        <h2 class="drawer-title">AirSense Authentication</h2>
-                        <p class="drawer-subtitle">Sign in to manage custom model weights and calibration pipelines</p>
+                        <h2 class="drawer-title" id="authModalTitle">Unique Key Authentication</h2>
+                        <p class="drawer-subtitle">Passwordless access to cloud chat synchronization</p>
                     </div>
                 </div>
                 <button class="drawer-close-btn" id="closeAuthBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="auth-modal-content">
-                <form id="v2LoginForm" class="v2-form">
-                    <div class="form-field">
-                        <label>Username</label>
-                        <input type="text" id="v2LoginUser" placeholder="Enter username" required class="drawer-input">
+                <!-- Logged In Profile View -->
+                <div id="v2AuthLoggedInView" style="display:none;" class="auth-profile-card">
+                    <div class="auth-profile-header">
+                        <div class="user-avatar-lg" id="profileAvatar">U</div>
+                        <div class="user-details-lg">
+                            <h3 id="profileUsername" class="profile-name">Researcher</h3>
+                            <span class="auth-cloud-badge"><i class="fa-solid fa-cloud-check"></i> Cloud Chat Sync Active</span>
+                        </div>
                     </div>
-                    <div class="form-field">
-                        <label>Password</label>
-                        <input type="password" id="v2LoginPass" placeholder="Enter password" required class="drawer-input">
+                    <div class="unique-key-container">
+                        <label class="key-container-label">Your Unique Access String Key:</label>
+                        <div class="key-display-pill">
+                            <code id="profileUniqueKey" class="unique-key-code">AIR-US-XXXX-YYYY</code>
+                            <button type="button" id="btnCopyProfileKey" class="copy-key-pill-btn" title="Copy Key to Clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <small class="key-hint">Save this unique key to authenticate on any device without a password.</small>
                     </div>
-                    <div id="v2AuthError" class="auth-error-msg" style="display:none;"></div>
-                    <button type="submit" class="drawer-btn-primary full-width">Sign In</button>
-                </form>
+                    <div class="auth-actions-group">
+                        <button type="button" id="btnLogoutBtn" class="drawer-btn-danger full-width">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Guest / Logged Out View with Tabs -->
+                <div id="v2AuthLoggedOutView">
+                    <div class="auth-tabs-bar">
+                        <button type="button" class="auth-tab-btn active" id="tabBtnSignIn">Sign In with Key</button>
+                        <button type="button" class="auth-tab-btn" id="tabBtnGenerate">Create New Key</button>
+                    </div>
+
+                    <!-- Panel 1: Authenticate with existing key -->
+                    <div class="auth-tab-panel active" id="tabPanelSignIn">
+                        <form id="v2KeyLoginForm" class="v2-form">
+                            <div class="form-field">
+                                <label for="v2LoginKeyInput">Enter Unique Access Key</label>
+                                <input type="text" id="v2LoginKeyInput" placeholder="e.g. AIR-US-B83A-79F1" required class="drawer-input mono-font" autocomplete="off">
+                                <small class="form-field-hint">Paste your unique key to restore cloud chat history.</small>
+                            </div>
+                            <div id="v2AuthError" class="auth-error-msg" style="display:none;"></div>
+                            <button type="submit" class="drawer-btn-primary full-width" id="btnSubmitKeyLogin">
+                                <i class="fa-solid fa-right-to-bracket"></i> Authenticate with Key
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Panel 2: Generate brand new key -->
+                    <div class="auth-tab-panel" id="tabPanelGenerate" style="display:none;">
+                        <form id="v2KeyGenerateForm" class="v2-form">
+                            <div class="form-field">
+                                <label for="v2GenUsername">Display Name (Optional)</label>
+                                <input type="text" id="v2GenUsername" placeholder="e.g. Researcher Hughes" class="drawer-input">
+                            </div>
+                            <div class="form-field">
+                                <label for="v2CustomKey">Custom Key String (Optional, leave blank to auto-generate)</label>
+                                <input type="text" id="v2CustomKey" placeholder="e.g. AIR-US-MYCUSTOMKEY" class="drawer-input mono-font">
+                            </div>
+                            <div id="v2GenError" class="auth-error-msg" style="display:none;"></div>
+                            <button type="submit" class="drawer-btn-accent full-width" id="btnSubmitGenKey">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Key & Sign In
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── CHAT PLOT LIGHTBOX MODAL -->
+    <div class="plot-lightbox-modal" id="plotLightboxModal" aria-hidden="true">
+        <div class="plot-lightbox-content">
+            <button class="plot-lightbox-close" id="closePlotLightboxBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <img id="plotLightboxImg" src="" alt="AirSense Generated Plot" class="plot-lightbox-img">
+            <div class="plot-lightbox-bar">
+                <a id="plotDownloadBtn" href="" download="airsense_plot.png" class="plot-lightbox-btn">
+                    <i class="fa-solid fa-download"></i> Download Plot
+                </a>
+                <button class="plot-lightbox-btn" id="plotLightboxCloseAction">
+                    <i class="fa-solid fa-check"></i> Done
+                </button>
             </div>
         </div>
     </div>
